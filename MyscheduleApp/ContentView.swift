@@ -6,19 +6,58 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct ContentView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Query private var tasks: [Task]
+
+    @State private var newTaskTitle: String = ""
+
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
+        NavigationStack {
+            VStack {
+                HStack {
+                    TextField("Enter task title", text: $newTaskTitle)
+                        .textFieldStyle(.roundedBorder)
+
+                    Button("Add") {
+                        addTask()
+                    }
+                    .disabled(newTaskTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+                .padding()
+
+                List {
+                    ForEach(tasks) { task in
+                        Text(task.title)
+                    }
+                    .onDelete(perform: deleteTasks)
+                }
+            }
+            .navigationTitle("Tasks")
         }
-        .padding()
+    }
+
+    private func addTask() {
+        let title = newTaskTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else { return }
+
+        let newTask = Task(title: title)
+        modelContext.insert(newTask)
+        newTaskTitle = ""
+    }
+
+    private func deleteTasks(offsets: IndexSet) {
+        withAnimation {
+            for index in offsets {
+                modelContext.delete(tasks[index])
+            }
+        }
     }
 }
 
 #Preview {
     ContentView()
+        .modelContainer(for: [Task.self, WorkSession.self], inMemory: true)
 }
