@@ -186,7 +186,7 @@ struct CategoryDropDelegate: DropDelegate {
     func performDrop(info: DropInfo) -> Bool {
         guard info.hasItemsConforming(to: [UTType.text]) else { return false }
 
-        let providers = info.itemProviders
+        let providers = info.itemProviders(for: [UTType.text])
         if let provider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.text.identifier) }) {
             _ = provider.loadObject(ofClass: String.self) { string, error in
                 if let idString = string, let id = UUID(uuidString: idString) {
