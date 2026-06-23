@@ -14,11 +14,11 @@ struct TaskManagementView: View {
     @Query(sort: \TaskCategory.orderIndex) private var categories: [TaskCategory]
     @Query private var tasks: [Task]
 
-    @State private var newTaskTitle: String = ""
     @State private var selectedCategory: TaskCategory?
     @State private var isShowingAddCategoryAlert = false
     @State private var newCategoryName = ""
     @State private var categoryToDelete: TaskCategory?
+    @State private var isShowingAddTaskSheet = false
 
     var body: some View {
         NavigationStack {
@@ -64,25 +64,23 @@ struct TaskManagementView: View {
                     .padding()
                 }
 
-                HStack {
-                    TextField("Enter task title", text: $newTaskTitle)
-                        .textFieldStyle(.roundedBorder)
-
-                    Button("Add") {
-                        addTask()
-                    }
-                    .disabled(newTaskTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-                .padding()
-
                 List {
                     ForEach(tasks.filter { $0.category?.id == selectedCategory?.id }) { task in
-                        Text(task.title)
+                        TaskRowView(task: task)
                     }
                     .onDelete(perform: deleteTasks)
                 }
             }
             .navigationTitle("Tasks")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: {
+                        isShowingAddTaskSheet = true
+                    }) {
+                        Image(systemName: "plus")
+                    }
+                }
+            }
             .alert("新しいカテゴリ", isPresented: $isShowingAddCategoryAlert) {
                 TextField("カテゴリ名", text: $newCategoryName)
                 Button("キャンセル", role: .cancel) {
@@ -115,6 +113,9 @@ struct TaskManagementView: View {
                 if selectedCategory == nil || !newCategories.contains(where: { $0.id == selectedCategory?.id }) {
                     selectedCategory = newCategories.first
                 }
+            }
+            .sheet(isPresented: $isShowingAddTaskSheet) {
+                AddTaskView(selectedCategory: selectedCategory)
             }
         }
     }
@@ -150,15 +151,6 @@ struct TaskManagementView: View {
         }
     }
 
-    private func addTask() {
-        let title = newTaskTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !title.isEmpty else { return }
-
-        let newTask = Task(title: title, category: selectedCategory)
-        modelContext.insert(newTask)
-        newTaskTitle = ""
-    }
-
     private func deleteTasks(offsets: IndexSet) {
         let filteredTasks = tasks.filter { $0.category?.id == selectedCategory?.id }
         withAnimation {
@@ -169,9 +161,162 @@ struct TaskManagementView: View {
     }
 }
 
+struct AddTaskView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
+
+    var selectedCategory: TaskCategory?
+
+    @State private var title: String = ""
+    @State private var status: TaskStatus = .todo
+    @State private var hasStartDate = false
+    @State private var startDate = Date()
+    @State private var hasPriority = false
+    @State private var priority: TaskPriority = .medium
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section(header: Text("タスク情報")) {
+                    TextField("タイトル", text: $title)
+
+                    Picker("ステータス", selection: $status) {
+                        ForEach(TaskStatus.allCases, id: \.self) { status in
+                            Text(status.rawValue).tag(status)
+                        }
+                    }
+                }
+
+                Section(header: Text("日付")) {
+                    Toggle("開始日を設定", isOn: $hasStartDate)
+                    if hasStartDate {
+                        DatePicker("開始日", selection: $startDate, displayedComponents: [.date, .hourAndMinute])
+                    }
+                }
+
+                Section(header: Text("優先度")) {
+                    Toggle("優先度を設定", isOn: $hasPriority)
+                    if hasPriority {
+                        Picker("優先度", selection: $priority) {
+                            ForEach(TaskPriority.allCases, id: \.self) { priority in
+                                Text(priority.rawValue).tag(priority)
+                            }
+                        }
+                        .pickerStyle(SegmentedPickerStyle())
+                    }
+                }
+            }
+            .navigationTitle("タスク追加")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("キャンセル") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("追加") {
+                        saveTask()
+                    }
+                    .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+    }
+
+    private func saveTask() {
+        let newTask = Task(
+            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+            status: status,
+            startDate: hasStartDate ? startDate : nil,
+            priority: hasPriority ? priority : nil,
+            category: selectedCategory
+        )
+        modelContext.insert(newTask)
+        dismiss()
+    }
+}
+
+struct TaskRowView: View {
+    @Bindable var task: Task
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Button(action: {
+                toggleStatus()
+            }) {
+                Image(systemName: statusIconName)
+                    .foregroundColor(statusColor)
+                    .font(.title2)
+            }
+            .buttonStyle(.plain)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(task.title)
+                    .strikethrough(task.status == .done)
+                    .foregroundColor(task.status == .done ? .gray : .primary)
+                    .font(.headline)
+
+                if task.startDate != nil || task.priority != nil {
+                    HStack(spacing: 8) {
+                        if let startDate = task.startDate {
+                            Label(startDate.formatted(date: .abbreviated, time: .shortened), systemImage: "calendar")
+                        }
+
+                        if let priority = task.priority {
+                            Label(priority.rawValue, systemImage: "exclamationmark.circle")
+                                .foregroundColor(priorityColor(priority))
+                        }
+                    }
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var statusIconName: String {
+        switch task.status {
+        case .todo: return "circle"
+        case .inProgress: return "circle.dashed"
+        case .done: return "checkmark.circle.fill"
+        }
+    }
+
+    private var statusColor: Color {
+        switch task.status {
+        case .todo: return .gray
+        case .inProgress: return .blue
+        case .done: return .green
+        }
+    }
+
+    private func priorityColor(_ priority: TaskPriority) -> Color {
+        switch priority {
+        case .high: return .red
+        case .medium: return .orange
+        case .low: return .blue
+        }
+    }
+
+    private func toggleStatus() {
+        withAnimation {
+            switch task.status {
+            case .todo:
+                task.status = .done
+            case .inProgress:
+                task.status = .done
+            case .done:
+                task.status = .todo
+            }
+        }
+    }
+}
+
 #Preview {
     TaskManagementView()
-        .modelContainer(for: [TaskCategory.self, Task.self, WorkSession.self], inMemory: true)
+        .modelContainer(for: [TaskCategory.self, Task.self, WorkSession.self, Tag.self], inMemory: true)
 }
 
 struct CategoryDropDelegate: DropDelegate {

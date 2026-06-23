@@ -14,6 +14,6 @@ struct MyscheduleAppApp: App {
         WindowGroup {
             ContentView()
         }
-        .modelContainer(for: [TaskCategory.self, Task.self, WorkSession.self])
+        .modelContainer(for: [TaskCategory.self, Task.self, WorkSession.self, Tag.self])
     }
 }
