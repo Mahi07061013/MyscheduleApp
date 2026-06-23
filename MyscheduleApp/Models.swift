@@ -54,8 +54,8 @@ final class Task {
     var priority: TaskPriority?
     var textColorHex: String?
 
-    @Relationship(deleteRule: .cascade, inverse: \WorkSession.task)
-    var workSessions: [WorkSession] = []
+    @Relationship(deleteRule: .cascade, inverse: \PomodoroSession.task)
+    var pomodoroSessions: [PomodoroSession]?
 
     var category: TaskCategory?
 
@@ -81,16 +81,16 @@ final class Task {
 }
 
 @Model
-final class WorkSession {
+final class PomodoroSession {
     @Attribute(.unique) var id: UUID
+    var date: Date
+    var duration: TimeInterval
     var task: Task?
-    var startTime: Date
-    var durationMinutes: Int
 
-    init(id: UUID = UUID(), startTime: Date, durationMinutes: Int, task: Task? = nil) {
+    init(id: UUID = UUID(), date: Date = Date(), duration: TimeInterval = 1500, task: Task? = nil) {
         self.id = id
-        self.startTime = startTime
-        self.durationMinutes = durationMinutes
+        self.date = date
+        self.duration = duration
         self.task = task
     }
 }

@@ -316,7 +316,7 @@ struct TaskRowView: View {
 
 #Preview {
     TaskManagementView()
-        .modelContainer(for: [TaskCategory.self, Task.self, WorkSession.self, Tag.self], inMemory: true)
+        .modelContainer(for: [TaskCategory.self, Task.self, PomodoroSession.self, Tag.self], inMemory: true)
 }
 
 struct CategoryDropDelegate: DropDelegate {
