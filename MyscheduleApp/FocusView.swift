@@ -3,9 +3,11 @@ import SwiftData
 
 struct FocusView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(filter: #Predicate<Task> { task in
-        task.status != TaskStatus.done
-    }) private var incompleteTasks: [Task]
+    @Query private var allTasks: [Task]
+
+    var incompleteTasks: [Task] {
+        allTasks.filter { $0.status != .done }
+    }
 
     @State private var selectedTask: Task?
 
