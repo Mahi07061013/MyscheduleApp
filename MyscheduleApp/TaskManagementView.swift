@@ -21,6 +21,13 @@ struct TaskManagementView: View {
     @State private var isShowingAddTaskSheet = false
     @State private var isShowingAddCategorySheet = false
 
+    private var listBackgroundColor: Color {
+        if let hex = selectedCategory?.themeColorHex, let color = Color(hex: hex) {
+            return color.opacity(0.15)
+        }
+        return Color.clear
+    }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -28,44 +35,22 @@ struct TaskManagementView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 12) {
                         ForEach(categories) { category in
-                            HStack(spacing: 6) {
-                                Text(category.name)
-
-                                let completedPomodoros = category.tasks.reduce(0) { total, task in
-                                    total + (task.pomodoroSessions?.count ?? 0)
-                                }
-
-                                if completedPomodoros > 0 {
-                                    Text("\(completedPomodoros)")
-                                        .font(.caption2).bold()
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 2)
-                                        .background(Color.white.opacity(selectedCategory == category ? 0.3 : 0.8))
-                                        .foregroundColor(selectedCategory == category ? .white : .primary)
-                                        .clipShape(Capsule())
-                                }
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                            .background(selectedCategory == category ? (category.themeColorHex != nil ? Color(hex: category.themeColorHex!) ?? Color.blue : Color.blue) : Color.gray.opacity(0.2))
-                            .foregroundColor(selectedCategory == category ? .white : .primary)
-                            .cornerRadius(16)
-                            .onTapGesture {
+                            CategoryTabItemView(
+                                category: category,
+                                selectedCategory: selectedCategory,
+                                onTap: {
                                     withAnimation {
                                         selectedCategory = category
                                     }
+                                },
+                                onDelete: {
+                                    categoryToDelete = category
                                 }
-                                .contextMenu {
-                                    Button(role: .destructive) {
-                                        categoryToDelete = category
-                                    } label: {
-                                        Label("削除", systemImage: "trash")
-                                    }
-                                }
-                                .onDrag {
-                                    NSItemProvider(object: category.id.uuidString as NSString)
-                                }
-                                .onDrop(of: [UTType.text], delegate: CategoryDropDelegate(item: category, categories: categories, onReorder: reorderCategories))
+                            )
+                            .onDrag {
+                                NSItemProvider(object: category.id.uuidString as NSString)
+                            }
+                            .onDrop(of: [UTType.text], delegate: CategoryDropDelegate(item: category, categories: categories, onReorder: reorderCategories))
                         }
 
                         Button(action: {
@@ -88,7 +73,7 @@ struct TaskManagementView: View {
                     .onDelete(perform: deleteTasks)
                 }
                 .scrollContentBackground(.hidden)
-                .background(selectedCategory?.themeColorHex != nil ? (Color(hex: selectedCategory!.themeColorHex!) ?? Color.clear).opacity(0.15) : Color.clear)
+                .background(listBackgroundColor)
             }
             .navigationTitle("Tasks")
             .toolbar {
@@ -166,6 +151,69 @@ struct TaskManagementView: View {
                 modelContext.delete(filteredTasks[index])
             }
         }
+    }
+}
+
+struct CategoryTabItemView: View {
+    let category: TaskCategory
+    let selectedCategory: TaskCategory?
+    let onTap: () -> Void
+    let onDelete: () -> Void
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(category.name)
+
+            if completedPomodoros > 0 {
+                Text("\(completedPomodoros)")
+                    .font(.caption2).bold()
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(badgeBackgroundColor)
+                    .foregroundColor(foregroundColor)
+                    .clipShape(Capsule())
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(backgroundColor)
+        .foregroundColor(foregroundColor)
+        .cornerRadius(16)
+        .onTapGesture(perform: onTap)
+        .contextMenu {
+            Button(role: .destructive, action: onDelete) {
+                Label("削除", systemImage: "trash")
+            }
+        }
+    }
+
+    private var completedPomodoros: Int {
+        category.tasks.reduce(0) { total, task in
+            total + (task.pomodoroSessions?.count ?? 0)
+        }
+    }
+
+    private var isSelected: Bool {
+        selectedCategory == category
+    }
+
+    private var backgroundColor: Color {
+        if isSelected {
+            if let hex = category.themeColorHex, let color = Color(hex: hex) {
+                return color
+            }
+            return .blue
+        } else {
+            return Color.gray.opacity(0.2)
+        }
+    }
+
+    private var badgeBackgroundColor: Color {
+        Color.white.opacity(isSelected ? 0.3 : 0.8)
+    }
+
+    private var foregroundColor: Color {
+        isSelected ? .white : .primary
     }
 }
 
@@ -372,6 +420,16 @@ struct TaskRowView: View {
         ("紫", .purple, Color.purple.toHex())
     ]
 
+    private var textColor: Color {
+        if task.status == .done {
+            return .gray
+        }
+        if let hex = task.textColorHex, let customColor = Color(hex: hex) {
+            return customColor
+        }
+        return .primary
+    }
+
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Button(action: {
@@ -386,7 +444,7 @@ struct TaskRowView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(task.title)
                     .strikethrough(task.status == .done)
-                    .foregroundColor(task.status == .done ? .gray : (task.textColorHex != nil ? Color(hex: task.textColorHex!) ?? .primary : .primary))
+                    .foregroundColor(textColor)
                     .font(.headline)
 
                 if task.startDate != nil || task.priority != nil {
