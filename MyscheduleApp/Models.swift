@@ -66,7 +66,9 @@ final class Task {
 
     var parentTask: Task?
 
-    init(id: UUID = UUID(), title: String, status: TaskStatus = .todo, startDate: Date? = nil, priority: TaskPriority? = nil, textColorHex: String? = nil, category: TaskCategory? = nil, tags: [Tag]? = nil, subtasks: [Task]? = nil, parentTask: Task? = nil) {
+    var isRest: Bool = false
+
+    init(id: UUID = UUID(), title: String, status: TaskStatus = .todo, startDate: Date? = nil, priority: TaskPriority? = nil, textColorHex: String? = nil, category: TaskCategory? = nil, tags: [Tag]? = nil, subtasks: [Task]? = nil, parentTask: Task? = nil, isRest: Bool = false) {
         self.id = id
         self.title = title
         self.status = status
@@ -77,6 +79,7 @@ final class Task {
         self.tags = tags
         self.subtasks = subtasks
         self.parentTask = parentTask
+        self.isRest = isRest
     }
 }
 

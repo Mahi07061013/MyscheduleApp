@@ -268,6 +268,7 @@ struct AddTaskView: View {
     @Query private var allTags: [Tag]
 
     var selectedCategory: TaskCategory?
+    var initialIsRest: Bool = false
 
     @State private var title: String = ""
     @State private var status: TaskStatus = .todo
@@ -275,6 +276,7 @@ struct AddTaskView: View {
     @State private var startDate = Date()
     @State private var hasPriority = false
     @State private var priority: TaskPriority = .medium
+    @State private var isRest: Bool = false
 
     @State private var selectedTags = Set<Tag>()
     @State private var newTagName = ""
@@ -293,6 +295,8 @@ struct AddTaskView: View {
                             Text(status.rawValue).tag(status)
                         }
                     }
+
+                    Toggle("休憩用タスク", isOn: $isRest)
                 }
 
                 Section(header: Text("日付")) {
@@ -386,6 +390,9 @@ struct AddTaskView: View {
                 }
             }
         }
+        .onAppear {
+            isRest = initialIsRest
+        }
     }
 
     private func saveTask() {
@@ -395,7 +402,8 @@ struct AddTaskView: View {
             startDate: hasStartDate ? startDate : nil,
             priority: hasPriority ? priority : nil,
             category: selectedCategory,
-            tags: Array(selectedTags)
+            tags: Array(selectedTags),
+            isRest: isRest
         )
 
         if !subtasks.isEmpty {
