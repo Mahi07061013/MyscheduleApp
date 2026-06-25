@@ -13,12 +13,20 @@ struct FocusView: View {
     @Query private var allTasks: [Task]
 
     @State private var focusMode: FocusMode = .focus
+    @State private var selectedCategoryForFocus: TaskCategory?
     @State private var selectedTask: Task?
     @State private var isShowingAddTaskSheet = false
 
+    @Query(sort: \TaskCategory.orderIndex) private var categories: [TaskCategory]
+
     var incompleteTasks: [Task] {
         allTasks.filter { task in
-            task.status != .done && task.isRest == (focusMode == .rest)
+            guard task.status != .done else { return false }
+            if focusMode == .rest {
+                return task.isRest
+            } else {
+                return !task.isRest && task.category?.id == selectedCategoryForFocus?.id
+            }
         }
     }
 
@@ -58,6 +66,23 @@ struct FocusView: View {
                 .padding()
                 .onChange(of: focusMode) { _, _ in
                     selectedTask = incompleteTasks.first
+                }
+
+                if focusMode == .focus {
+                    HStack {
+                        Picker("タブ", selection: $selectedCategoryForFocus) {
+                            Text("未分類").tag(TaskCategory?.none)
+                            ForEach(categories) { category in
+                                Text(category.name).tag(TaskCategory?.some(category))
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .onChange(of: selectedCategoryForFocus) { _, _ in
+                            selectedTask = incompleteTasks.first
+                        }
+                        Spacer()
+                    }
+                    .padding(.horizontal)
                 }
 
                 HStack {
@@ -214,7 +239,7 @@ struct FocusView: View {
                 Text("進行状況は保存されません。")
             }
             .sheet(isPresented: $isShowingAddTaskSheet) {
-                AddTaskView(initialIsRest: focusMode == .rest, showCategoryCreation: focusMode == .focus)
+                AddTaskView(selectedCategory: selectedCategoryForFocus, initialIsRest: focusMode == .rest, showCategoryCreation: focusMode == .focus)
             }
         }
     }
