@@ -7,9 +7,22 @@ enum DisplayMode: String, CaseIterable {
     case duration = "取り組んだ時間"
 }
 
+enum ChartPeriod: String, CaseIterable {
+    case week = "直近7日間"
+    case month = "直近1ヶ月"
+    case year = "直近1年"
+}
+
 struct ReflectView: View {
+    @Environment(\.modelContext) private var modelContext
     @Query var sessions: [PomodoroSession]
+    @Query(sort: \Task.completedDate, order: .reverse) var allTasks: [Task]
+    @Query var journalEntries: [JournalEntry]
+
     @State private var displayMode: DisplayMode = .count
+    @State private var chartPeriod: ChartPeriod = .week
+    @State private var selectedDate: Date = Date()
+    @State private var journalText: String = ""
 
     // MARK: - Helpers
 
@@ -27,11 +40,19 @@ struct ReflectView: View {
         }
     }
 
-    // Last 7 days aggregation
-    private var last7DaysData: [(date: Date, value: Double)] {
+    // Chart data aggregation
+    private var chartData: [(date: Date, value: Double)] {
         let today = calendar.startOfDay(for: Date())
         var data: [(date: Date, value: Double)] = []
-        for i in (0..<7).reversed() {
+
+        let daysToFetch: Int
+        switch chartPeriod {
+        case .week: daysToFetch = 7
+        case .month: daysToFetch = 30
+        case .year: daysToFetch = 365
+        }
+
+        for i in (0..<daysToFetch).reversed() {
             guard let date = calendar.date(byAdding: .day, value: -i, to: today) else { continue }
             let dailySessions = sessionsByDate[date] ?? []
             let value: Double = displayMode == .count
@@ -105,110 +126,252 @@ struct ReflectView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
-                    Picker("表示モード", selection: $displayMode) {
-                        ForEach(DisplayMode.allCases, id: \.self) { mode in
-                            Text(mode.rawValue).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .padding(.horizontal)
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("カレンダー")
-                            .font(.headline)
-                            .padding(.horizontal)
-
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 4) {
-                            ForEach(currentMonthDates, id: \.self) { date in
-                                let isCurrentMonth = calendar.isDate(date, equalTo: Date(), toGranularity: .month)
-                                let hasSessions = !(sessionsByDate[date]?.isEmpty ?? true)
-
-                                RoundedRectangle(cornerRadius: 4)
-                                    .fill(hasSessions ? Color.green.opacity(0.8) : Color.gray.opacity(0.2))
-                                    .frame(height: 40)
-                                    .overlay {
-                                        Text("\(calendar.component(.day, from: date))")
-                                            .font(.caption2)
-                                            .foregroundColor(isCurrentMonth ? .primary : .secondary)
-                                    }
-                            }
-                        }
-                        .padding(.horizontal)
-                    }
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("直近7日間の実績")
-                            .font(.headline)
-                            .padding(.horizontal)
-
-                        Chart {
-                            ForEach(last7DaysData, id: \.date) { dataPoint in
-                                BarMark(
-                                    x: .value("日付", dataPoint.date, unit: .day),
-                                    y: .value(displayMode == .count ? "回数" : "時間 (分)", dataPoint.value)
-                                )
-                                .foregroundStyle(Color.blue.gradient)
-                            }
-                        }
-                        .chartXAxis {
-                            AxisMarks(values: .stride(by: .day)) { value in
-                                AxisGridLine()
-                                AxisValueLabel(format: .dateTime.month().day())
-                            }
-                        }
-                        .frame(height: 200)
-                        .padding(.horizontal)
-                    }
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("カテゴリ別の実績")
-                            .font(.headline)
-                            .padding(.horizontal)
-
-                        ZStack {
-                            Chart {
-                                ForEach(categoryData) { dataPoint in
-                                    SectorMark(
-                                        angle: .value(displayMode == .count ? "回数" : "時間", dataPoint.value),
-                                        innerRadius: .ratio(0.6),
-                                        angularInset: 1.5
-                                    )
-                                    .foregroundStyle(by: .value("カテゴリ", dataPoint.name))
-                                    .cornerRadius(4)
-                                }
-                            }
-                            .frame(height: 250)
-                            .padding(.horizontal)
-
-                            VStack {
-                                Text("合計")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                if displayMode == .count {
-                                    Text("\(Int(totalCategoryValue)) 回")
-                                        .font(.title2)
-                                        .bold()
-                                } else {
-                                    let hours = Int(totalCategoryValue) / 60
-                                    let minutes = Int(totalCategoryValue) % 60
-                                    if hours > 0 {
-                                        Text("\(hours)h \(minutes)m")
-                                            .font(.title2)
-                                            .bold()
-                                    } else {
-                                        Text("\(minutes)m")
-                                            .font(.title2)
-                                            .bold()
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    calendarSection
+                    controlsSection
+                    journalSection
+                    chartSection
+                    categorySection
+                    motivationSection
                 }
                 .padding(.vertical)
             }
             .navigationTitle("振り返り")
         }
+    }
+
+    // MARK: - View Sections
+
+    @ViewBuilder
+    private var calendarSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("カレンダー")
+                .font(.headline)
+                .padding(.horizontal)
+
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 4) {
+                ForEach(currentMonthDates, id: \.self) { date in
+                    let isCurrentMonth = calendar.isDate(date, equalTo: Date(), toGranularity: .month)
+                    let isSelectedDate = calendar.isDate(date, equalTo: selectedDate, toGranularity: .day)
+                    let hasSessions = !(sessionsByDate[date]?.isEmpty ?? true)
+
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(hasSessions ? Color.green.opacity(0.8) : Color.gray.opacity(0.2))
+                        .frame(height: 40)
+                        .overlay {
+                            Text("\(calendar.component(.day, from: date))")
+                                .font(.caption2)
+                                .foregroundColor(isCurrentMonth ? .primary : .secondary)
+                        }
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 4)
+                                .stroke(isSelectedDate ? Color.blue : Color.clear, lineWidth: 2)
+                        )
+                        .onTapGesture {
+                            selectedDate = date
+                            loadJournalEntry(for: date)
+                        }
+                }
+            }
+            .padding(.horizontal)
+        }
+    }
+
+    @ViewBuilder
+    private var controlsSection: some View {
+        HStack {
+            Picker("表示モード", selection: $displayMode) {
+                ForEach(DisplayMode.allCases, id: \.self) { mode in
+                    Text(mode.rawValue).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            Picker("期間", selection: $chartPeriod) {
+                ForEach(ChartPeriod.allCases, id: \.self) { period in
+                    Text(period.rawValue).tag(period)
+                }
+            }
+            .pickerStyle(.menu)
+        }
+        .padding(.horizontal)
+    }
+
+    @ViewBuilder
+    private var journalSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("\(selectedDate, format: .dateTime.month().day()) の日記")
+                .font(.headline)
+                .padding(.horizontal)
+
+            TextEditor(text: $journalText)
+                .frame(minHeight: 100)
+                .padding(8)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.gray.opacity(0.5), lineWidth: 1)
+                )
+                .padding(.horizontal)
+
+            Button(action: saveJournalEntry) {
+                Text("保存")
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.blue)
+                    .foregroundColor(.white)
+                    .cornerRadius(8)
+            }
+            .padding(.horizontal)
+        }
+        .onAppear {
+            loadJournalEntry(for: selectedDate)
+        }
+    }
+
+    // MARK: - Journal Actions
+
+    private func loadJournalEntry(for date: Date) {
+        if let entry = journalEntries.first(where: { calendar.isDate($0.date, equalTo: date, toGranularity: .day) }) {
+            journalText = entry.content
+        } else {
+            journalText = ""
+        }
+    }
+
+    private func saveJournalEntry() {
+        if let entry = journalEntries.first(where: { calendar.isDate($0.date, equalTo: selectedDate, toGranularity: .day) }) {
+            entry.content = journalText
+        } else {
+            let newEntry = JournalEntry(date: selectedDate, content: journalText)
+            modelContext.insert(newEntry)
+        }
+        try? modelContext.save()
+    }
+
+    @ViewBuilder
+    private var chartSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("\(chartPeriod.rawValue)の実績")
+                .font(.headline)
+                .padding(.horizontal)
+
+            Chart {
+                ForEach(chartData, id: \.date) { dataPoint in
+                    BarMark(
+                        x: .value("日付", dataPoint.date, unit: .day),
+                        y: .value(displayMode == .count ? "回数" : "時間 (分)", dataPoint.value)
+                    )
+                    .foregroundStyle(Color.blue.gradient)
+                }
+            }
+            .chartXAxis {
+                let strideUnit: Calendar.Component = chartPeriod == .year ? .month : .day
+                let format: Date.FormatStyle = chartPeriod == .year ? .dateTime.year().month() : .dateTime.month().day()
+
+                AxisMarks(values: .stride(by: strideUnit)) { value in
+                    AxisGridLine()
+                    AxisValueLabel(format: format)
+                }
+            }
+            .frame(height: 200)
+            .padding(.horizontal)
+        }
+    }
+
+    @ViewBuilder
+    private var categorySection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("カテゴリ別の実績")
+                .font(.headline)
+                .padding(.horizontal)
+
+            ZStack {
+                Chart {
+                    ForEach(categoryData) { dataPoint in
+                        SectorMark(
+                            angle: .value(displayMode == .count ? "回数" : "時間", dataPoint.value),
+                            innerRadius: .ratio(0.6),
+                            angularInset: 1.5
+                        )
+                        .foregroundStyle(by: .value("カテゴリ", dataPoint.name))
+                        .cornerRadius(4)
+                    }
+                }
+                .frame(height: 250)
+                .padding(.horizontal)
+
+                VStack {
+                    Text("合計")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    if displayMode == .count {
+                        Text("\(Int(totalCategoryValue)) 回")
+                            .font(.title2)
+                            .bold()
+                    } else {
+                        let hours = Int(totalCategoryValue) / 60
+                        let minutes = Int(totalCategoryValue) % 60
+                        if hours > 0 {
+                            Text("\(hours)h \(minutes)m")
+                                .font(.title2)
+                                .bold()
+                        } else {
+                            Text("\(minutes)m")
+                                .font(.title2)
+                                .bold()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var motivationSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("最近達成したタスク")
+                .font(.headline)
+                .padding(.horizontal)
+
+            let completedTasks = allTasks.filter { $0.status == .done }
+                .sorted { ($0.completedDate ?? Date.distantPast) > ($1.completedDate ?? Date.distantPast) }
+                .prefix(5)
+
+            if completedTasks.isEmpty {
+                Text("まだ達成したタスクはありません。")
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal)
+            } else {
+                ForEach(completedTasks) { task in
+                    let daysTaken = calculateDaysTaken(for: task)
+                    let totalTime = calculateTotalTime(for: task)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("🎉 [\(task.title)] を達成！ \(daysTaken)日かかりました。合計で\(totalTime)時間取り組みました")
+                            .font(.subheadline)
+                            .padding(8)
+                            .background(Color.orange.opacity(0.1))
+                            .cornerRadius(8)
+                    }
+                    .padding(.horizontal)
+                }
+            }
+        }
+    }
+
+    // MARK: - Motivation Helpers
+
+    private func calculateDaysTaken(for task: Task) -> Int {
+        guard let start = task.startDate, let end = task.completedDate else { return 0 }
+        let components = calendar.dateComponents([.day], from: calendar.startOfDay(for: start), to: calendar.startOfDay(for: end))
+        return max(1, (components.day ?? 0) + 1) // If done on the same day, it counts as 1 day
+    }
+
+    private func calculateTotalTime(for task: Task) -> Double {
+        let sessions = task.pomodoroSessions ?? []
+        let totalSeconds = sessions.reduce(0) { $0 + $1.duration }
+        let hours = totalSeconds / 3600.0
+        // Round to 1 decimal place
+        return (hours * 10).rounded() / 10
     }
 }
 
