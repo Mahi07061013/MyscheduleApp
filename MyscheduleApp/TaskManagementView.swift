@@ -15,6 +15,7 @@ struct TaskManagementView: View {
     @Query private var tasks: [Task]
 
     @State private var selectedCategory: TaskCategory?
+    @State private var isRestTabSelected = false
     @State private var isShowingAddCategoryAlert = false
     @State private var newCategoryName = ""
     @State private var categoryToDelete: TaskCategory?
@@ -22,6 +23,9 @@ struct TaskManagementView: View {
     @State private var isShowingAddCategorySheet = false
 
     private var listBackgroundColor: Color {
+        if isRestTabSelected {
+            return Color.green.opacity(0.15)
+        }
         if let hex = selectedCategory?.themeColorHex, let color = Color(hex: hex) {
             return color.opacity(0.15)
         }
@@ -38,9 +42,11 @@ struct TaskManagementView: View {
                             CategoryTabItemView(
                                 category: category,
                                 selectedCategory: selectedCategory,
+                                isRestTabSelected: isRestTabSelected,
                                 onTap: {
                                     withAnimation {
                                         selectedCategory = category
+                                        isRestTabSelected = false
                                     }
                                 },
                                 onDelete: {
@@ -51,6 +57,21 @@ struct TaskManagementView: View {
                                 NSItemProvider(object: category.id.uuidString as NSString)
                             }
                             .onDrop(of: [UTType.text], delegate: CategoryDropDelegate(item: category, categories: categories, onReorder: reorderCategories))
+                        }
+
+                        // Rest tab (permanent, cannot be deleted)
+                        Button(action: {
+                            withAnimation {
+                                selectedCategory = nil
+                                isRestTabSelected = true
+                            }
+                        }) {
+                            Text("休憩")
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                                .background(isRestTabSelected ? Color.green : Color.gray.opacity(0.2))
+                                .foregroundColor(isRestTabSelected ? .white : .primary)
+                                .cornerRadius(16)
                         }
 
                         Button(action: {
@@ -67,7 +88,13 @@ struct TaskManagementView: View {
                 }
 
                 List {
-                    ForEach(tasks.filter { $0.category?.id == selectedCategory?.id }) { task in
+                    ForEach(tasks.filter { task in
+                        if isRestTabSelected {
+                            return task.isRest
+                        } else {
+                            return !task.isRest && task.category?.id == selectedCategory?.id
+                        }
+                    }) { task in
                         TaskRowView(task: task)
                     }
                     .onDelete(perform: deleteTasks)
@@ -91,6 +118,7 @@ struct TaskManagementView: View {
                     modelContext: modelContext,
                     onSave: { newCategory in
                         selectedCategory = newCategory
+                        isRestTabSelected = false
                     }
                 )
             }
@@ -118,7 +146,7 @@ struct TaskManagementView: View {
                 }
             }
             .sheet(isPresented: $isShowingAddTaskSheet) {
-                AddTaskView(selectedCategory: selectedCategory)
+                AddTaskView(selectedCategory: selectedCategory, initialIsRest: isRestTabSelected)
             }
         }
     }
@@ -145,7 +173,13 @@ struct TaskManagementView: View {
     }
 
     private func deleteTasks(offsets: IndexSet) {
-        let filteredTasks = tasks.filter { $0.category?.id == selectedCategory?.id }
+        let filteredTasks = tasks.filter { task in
+            if isRestTabSelected {
+                return task.isRest
+            } else {
+                return !task.isRest && task.category?.id == selectedCategory?.id
+            }
+        }
         withAnimation {
             for index in offsets {
                 modelContext.delete(filteredTasks[index])
@@ -157,6 +191,7 @@ struct TaskManagementView: View {
 struct CategoryTabItemView: View {
     let category: TaskCategory
     let selectedCategory: TaskCategory?
+    let isRestTabSelected: Bool
     let onTap: () -> Void
     let onDelete: () -> Void
 
@@ -194,7 +229,7 @@ struct CategoryTabItemView: View {
     }
 
     private var isSelected: Bool {
-        selectedCategory == category
+        selectedCategory?.id == category.id && !isRestTabSelected
     }
 
     private var backgroundColor: Color {
@@ -269,6 +304,7 @@ struct AddTaskView: View {
 
     var selectedCategory: TaskCategory?
     var initialIsRest: Bool = false
+    var showCategoryCreation: Bool = false
 
     @State private var title: String = ""
     @State private var status: TaskStatus = .todo
@@ -276,7 +312,7 @@ struct AddTaskView: View {
     @State private var startDate = Date()
     @State private var hasPriority = false
     @State private var priority: TaskPriority = .medium
-    @State private var isRest: Bool = false
+    @State private var newCategoryNameInTask = ""
 
     @State private var selectedTags = Set<Tag>()
     @State private var newTagName = ""
@@ -296,7 +332,9 @@ struct AddTaskView: View {
                         }
                     }
 
-                    Toggle("休憩用タスク", isOn: $isRest)
+                    if showCategoryCreation && !initialIsRest {
+                        TextField("新しいタブ（カテゴリ）名", text: $newCategoryNameInTask)
+                    }
                 }
 
                 Section(header: Text("日付")) {
@@ -390,20 +428,25 @@ struct AddTaskView: View {
                 }
             }
         }
-        .onAppear {
-            isRest = initialIsRest
-        }
     }
 
     private func saveTask() {
+        var finalCategory = selectedCategory
+        let trimmedNewCategory = newCategoryNameInTask.trimmingCharacters(in: .whitespacesAndNewlines)
+        if showCategoryCreation && !initialIsRest && !trimmedNewCategory.isEmpty {
+            let newCategory = TaskCategory(name: trimmedNewCategory, orderIndex: 999) // Can be adjusted, or fetch max order index
+            modelContext.insert(newCategory)
+            finalCategory = newCategory
+        }
+
         let newTask = Task(
             title: title.trimmingCharacters(in: .whitespacesAndNewlines),
             status: status,
             startDate: hasStartDate ? startDate : nil,
             priority: hasPriority ? priority : nil,
-            category: selectedCategory,
+            category: finalCategory,
             tags: Array(selectedTags),
-            isRest: isRest
+            isRest: initialIsRest
         )
 
         if !subtasks.isEmpty {

@@ -15,10 +15,6 @@ struct FocusView: View {
     @State private var focusMode: FocusMode = .focus
     @State private var selectedTask: Task?
     @State private var isShowingAddTaskSheet = false
-    @State private var isShowingAddCategorySheet = false
-
-    // Fetch categories for AddCategorySheet
-    @Query(sort: \TaskCategory.orderIndex) private var categories: [TaskCategory]
 
     var incompleteTasks: [Task] {
         allTasks.filter { task in
@@ -80,18 +76,9 @@ struct FocusView: View {
 
                     Spacer()
 
-                    Menu {
-                        Button(action: {
-                            isShowingAddTaskSheet = true
-                        }) {
-                            Label("タスクを新しく作る", systemImage: "plus.circle")
-                        }
-                        Button(action: {
-                            isShowingAddCategorySheet = true
-                        }) {
-                            Label("タブを新しく作る", systemImage: "folder.badge.plus")
-                        }
-                    } label: {
+                    Button(action: {
+                        isShowingAddTaskSheet = true
+                    }) {
                         Image(systemName: "plus")
                             .padding(8)
                             .background(Color.gray.opacity(0.2))
@@ -99,25 +86,6 @@ struct FocusView: View {
                     }
                 }
                 .padding(.horizontal)
-
-                HStack {
-                    Text("タイマー時間:")
-                    Picker("時間", selection: $defaultDurationMinutes) {
-                        ForEach(Array(stride(from: 5, through: 60, by: 5)), id: \.self) { minutes in
-                            Text("\(minutes)分").tag(minutes)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .onChange(of: defaultDurationMinutes) { _, _ in
-                        if !isRunning && timeRemaining == defaultDuration {
-                            timeRemaining = defaultDuration
-                        } else if !isRunning {
-                             timeRemaining = defaultDuration
-                        }
-                    }
-                }
-                .padding(.horizontal)
-                .disabled(isRunning)
 
                 Spacer()
 
@@ -134,8 +102,25 @@ struct FocusView: View {
                         .rotationEffect(Angle(degrees: 270.0))
                         .animation(.linear, value: progress)
 
-                    Text(timeString)
-                        .font(.system(size: 60, weight: .bold, design: .monospaced))
+                    Menu {
+                        Picker("時間", selection: $defaultDurationMinutes) {
+                            ForEach(Array(stride(from: 5, through: 60, by: 5)), id: \.self) { minutes in
+                                Text("\(minutes)分").tag(minutes)
+                            }
+                        }
+                    } label: {
+                        Text(timeString)
+                            .font(.system(size: 60, weight: .bold, design: .monospaced))
+                            .foregroundColor(.primary)
+                    }
+                    .disabled(isRunning)
+                    .onChange(of: defaultDurationMinutes) { _, _ in
+                        if !isRunning && timeRemaining == defaultDuration {
+                            timeRemaining = defaultDuration
+                        } else if !isRunning {
+                             timeRemaining = defaultDuration
+                        }
+                    }
                 }
                 .padding(40)
 
@@ -229,14 +214,7 @@ struct FocusView: View {
                 Text("進行状況は保存されません。")
             }
             .sheet(isPresented: $isShowingAddTaskSheet) {
-                AddTaskView(initialIsRest: focusMode == .rest)
-            }
-            .sheet(isPresented: $isShowingAddCategorySheet) {
-                AddCategorySheet(
-                    categories: categories,
-                    modelContext: modelContext,
-                    onSave: { _ in }
-                )
+                AddTaskView(initialIsRest: focusMode == .rest, showCategoryCreation: focusMode == .focus)
             }
         }
     }
