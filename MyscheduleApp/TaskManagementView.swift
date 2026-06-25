@@ -26,6 +26,7 @@ struct TaskManagementView: View {
     @State private var categoryToDelete: TaskCategory?
     @State private var isShowingAddTaskSheet = false
     @State private var isShowingAddCategorySheet = false
+    @State private var selectedTaskForDetail: Task?
 
     private var listBackgroundColor: Color {
         if viewMode == .rest {
@@ -106,10 +107,16 @@ struct TaskManagementView: View {
                         } else {
                             return !task.isRest && task.category?.id == selectedCategory?.id
                         }
-                    }) { task in
-                        TaskRowView(task: task)
+                    }.sorted(by: { $0.orderIndex < $1.orderIndex })) { task in
+                        Button(action: {
+                            selectedTaskForDetail = task
+                        }) {
+                            TaskRowView(task: task)
+                        }
+                        .buttonStyle(.plain)
                     }
                     .onDelete(perform: deleteTasks)
+                    .onMove(perform: moveTasks)
                 }
                 .scrollContentBackground(.hidden)
                 .background(listBackgroundColor)
@@ -154,6 +161,25 @@ struct TaskManagementView: View {
             .sheet(isPresented: $isShowingAddTaskSheet) {
                 AddTaskView(selectedCategory: selectedCategory, initialIsRest: viewMode == .rest)
             }
+            .sheet(item: $selectedTaskForDetail) { task in
+                TaskDetailView(task: task)
+            }
+        }
+    }
+
+    private func moveTasks(from source: IndexSet, to destination: Int) {
+        var filteredTasks = tasks.filter { task in
+            if viewMode == .rest {
+                return task.isRest
+            } else {
+                return !task.isRest && task.category?.id == selectedCategory?.id
+            }
+        }.sorted(by: { $0.orderIndex < $1.orderIndex })
+
+        filteredTasks.move(fromOffsets: source, toOffset: destination)
+
+        for (index, task) in filteredTasks.enumerated() {
+            task.orderIndex = index
         }
     }
 
@@ -185,7 +211,7 @@ struct TaskManagementView: View {
             } else {
                 return !task.isRest && task.category?.id == selectedCategory?.id
             }
-        }
+        }.sorted(by: { $0.orderIndex < $1.orderIndex })
         withAnimation {
             for index in offsets {
                 modelContext.delete(filteredTasks[index])
@@ -483,15 +509,8 @@ struct AddTaskView: View {
 
 struct TaskRowView: View {
     @Bindable var task: Task
-
-    let colorOptions: [(name: String, color: Color, hex: String?)] = [
-        ("デフォルト", .primary, nil),
-        ("赤", .red, Color.red.toHex()),
-        ("青", .blue, Color.blue.toHex()),
-        ("緑", .green, Color.green.toHex()),
-        ("オレンジ", .orange, Color.orange.toHex()),
-        ("紫", .purple, Color.purple.toHex())
-    ]
+    @Environment(\.modelContext) private var modelContext
+    @State private var isShowingDeleteAlert = false
 
     private var textColor: Color {
         if task.status == .done {
@@ -513,6 +532,8 @@ struct TaskRowView: View {
                     .font(.title2)
             }
             .buttonStyle(.plain)
+            // Tap gesture is disabled here so it doesn't propagate to the row's Button action if we just want to toggle status. Wait, if Button is around TaskRowView, it intercepts taps.
+            // By keeping the button here, SwiftUI might handle it correctly.
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(task.title)
@@ -538,21 +559,19 @@ struct TaskRowView: View {
         }
         .padding(.vertical, 4)
         .contextMenu {
-            Menu("文字色を変更") {
-                ForEach(0..<colorOptions.count, id: \.self) { index in
-                    Button {
-                        task.textColorHex = colorOptions[index].hex
-                    } label: {
-                        HStack {
-                            Text(colorOptions[index].name)
-                            Spacer()
-                            if task.textColorHex == colorOptions[index].hex {
-                                Image(systemName: "checkmark")
-                            }
-                        }
-                    }
-                }
+            Button(role: .destructive) {
+                isShowingDeleteAlert = true
+            } label: {
+                Label("削除", systemImage: "trash")
             }
+        }
+        .alert("確認", isPresented: $isShowingDeleteAlert) {
+            Button("キャンセル", role: .cancel) { }
+            Button("削除", role: .destructive) {
+                modelContext.delete(task)
+            }
+        } message: {
+            Text("このタスクを削除しますか？")
         }
     }
 
