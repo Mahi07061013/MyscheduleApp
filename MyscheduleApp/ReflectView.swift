@@ -17,8 +17,12 @@ struct ReflectView: View {
         Calendar.current
     }
 
+    private var filteredSessions: [PomodoroSession] {
+        sessions.filter { $0.task?.isRest != true }
+    }
+
     private var sessionsByDate: [Date: [PomodoroSession]] {
-        Dictionary(grouping: sessions) { session in
+        Dictionary(grouping: filteredSessions) { session in
             calendar.startOfDay(for: session.date)
         }
     }
@@ -49,7 +53,7 @@ struct ReflectView: View {
     private var categoryData: [CategoryData] {
         var grouped: [String: (colorHex: String?, value: Double)] = [:]
 
-        for session in sessions {
+        for session in filteredSessions {
             let categoryName = session.task?.category?.name ?? "未分類"
             let colorHex = session.task?.category?.themeColorHex
 
