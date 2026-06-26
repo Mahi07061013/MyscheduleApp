@@ -7,9 +7,22 @@ enum DisplayMode: String, CaseIterable {
     case duration = "取り組んだ時間"
 }
 
+enum ChartPeriod: String, CaseIterable {
+    case last7Days = "直近7日間"
+    case last1Month = "直近1ヶ月"
+    case last1Year = "直近1年"
+}
+
 struct ReflectView: View {
+    @Environment(\.modelContext) private var modelContext
     @Query var sessions: [PomodoroSession]
+    @Query var tasks: [Task]
+    @Query var journals: [JournalEntry]
+
     @State private var displayMode: DisplayMode = .count
+    @State private var chartPeriod: ChartPeriod = .last7Days
+    @State private var selectedDate: Date? = nil
+    @State private var journalContent: String = ""
 
     // MARK: - Helpers
 
@@ -27,17 +40,58 @@ struct ReflectView: View {
         }
     }
 
-    // Last 7 days aggregation
-    private var last7DaysData: [(date: Date, value: Double)] {
+    private var completedTasksByDate: [Date: [Task]] {
+        let completed = tasks.filter { $0.completedDate != nil }
+        return Dictionary(grouping: completed) { task in
+            calendar.startOfDay(for: task.completedDate!)
+        }
+    }
+
+    private var journalsByDate: [Date: JournalEntry] {
+        var dict: [Date: JournalEntry] = [:]
+        for journal in journals {
+            dict[calendar.startOfDay(for: journal.date)] = journal
+        }
+        return dict
+    }
+
+    // Chart aggregation
+    private var chartData: [(date: Date, value: Double)] {
         let today = calendar.startOfDay(for: Date())
         var data: [(date: Date, value: Double)] = []
-        for i in (0..<7).reversed() {
-            guard let date = calendar.date(byAdding: .day, value: -i, to: today) else { continue }
-            let dailySessions = sessionsByDate[date] ?? []
-            let value: Double = displayMode == .count
-                ? Double(dailySessions.count)
-                : dailySessions.reduce(0) { $0 + $1.duration / 60.0 } // minutes
-            data.append((date: date, value: value))
+
+        switch chartPeriod {
+        case .last7Days:
+            for i in (0..<7).reversed() {
+                guard let date = calendar.date(byAdding: .day, value: -i, to: today) else { continue }
+                let dailySessions = sessionsByDate[date] ?? []
+                let value: Double = displayMode == .count
+                    ? Double(dailySessions.count)
+                    : dailySessions.reduce(0) { $0 + $1.duration / 60.0 }
+                data.append((date: date, value: value))
+            }
+        case .last1Month:
+            for i in (0..<30).reversed() {
+                guard let date = calendar.date(byAdding: .day, value: -i, to: today) else { continue }
+                let dailySessions = sessionsByDate[date] ?? []
+                let value: Double = displayMode == .count
+                    ? Double(dailySessions.count)
+                    : dailySessions.reduce(0) { $0 + $1.duration / 60.0 }
+                data.append((date: date, value: value))
+            }
+        case .last1Year:
+            for i in (0..<12).reversed() {
+                guard let monthDate = calendar.date(byAdding: .month, value: -i, to: today),
+                      let startOfMonth = calendar.dateInterval(of: .month, for: monthDate)?.start else { continue }
+
+                var monthlyValue: Double = 0
+                for session in sessions.filter({ $0.task?.isRest != true }) {
+                    if calendar.isDate(session.date, equalTo: startOfMonth, toGranularity: .month) {
+                        monthlyValue += displayMode == .count ? 1.0 : session.duration / 60.0
+                    }
+                }
+                data.append((date: startOfMonth, value: monthlyValue))
+            }
         }
         return data
     }
@@ -119,17 +173,56 @@ struct ReflectView: View {
                             .padding(.horizontal)
 
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 4) {
-                            ForEach(currentMonthDates, id: \.self) { date in
+                            ForEach(currentMonthDates.indices, id: \.self) { index in
+                                let date = currentMonthDates[index]
                                 let isCurrentMonth = calendar.isDate(date, equalTo: Date(), toGranularity: .month)
-                                let hasSessions = !(sessionsByDate[date]?.isEmpty ?? true)
+                                let startOfDay = calendar.startOfDay(for: date)
+                                let hasSessions = !(sessionsByDate[startOfDay]?.isEmpty ?? true)
+                                let hasCompletedTasks = !(completedTasksByDate[startOfDay]?.isEmpty ?? true)
+                                let hasJournal = journalsByDate[startOfDay] != nil
+                                let isSelected = selectedDate == startOfDay
 
                                 RoundedRectangle(cornerRadius: 4)
                                     .fill(hasSessions ? Color.green.opacity(0.8) : Color.gray.opacity(0.2))
                                     .frame(height: 40)
                                     .overlay {
-                                        Text("\(calendar.component(.day, from: date))")
-                                            .font(.caption2)
-                                            .foregroundColor(isCurrentMonth ? .primary : .secondary)
+                                        ZStack {
+                                            Text("\(calendar.component(.day, from: date))")
+                                                .font(.caption2)
+                                                .foregroundColor(isCurrentMonth ? .primary : .secondary)
+
+                                            if hasCompletedTasks {
+                                                VStack {
+                                                    HStack {
+                                                        Spacer()
+                                                        Text("⭐")
+                                                            .font(.system(size: 8))
+                                                    }
+                                                    Spacer()
+                                                }
+                                                .padding(2)
+                                            }
+
+                                            if hasJournal {
+                                                VStack {
+                                                    HStack {
+                                                        Text("💬")
+                                                            .font(.system(size: 8))
+                                                        Spacer()
+                                                    }
+                                                    Spacer()
+                                                }
+                                                .padding(2)
+                                            }
+                                        }
+                                    }
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 4)
+                                            .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
+                                    )
+                                    .onTapGesture {
+                                        selectedDate = startOfDay
+                                        journalContent = journalsByDate[startOfDay]?.content ?? ""
                                     }
                             }
                         }
@@ -137,23 +230,36 @@ struct ReflectView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("直近7日間の実績")
-                            .font(.headline)
-                            .padding(.horizontal)
+                        HStack {
+                            Text("実績グラフ")
+                                .font(.headline)
+                            Spacer()
+                            Picker("期間", selection: $chartPeriod) {
+                                ForEach(ChartPeriod.allCases, id: \.self) { period in
+                                    Text(period.rawValue).tag(period)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                        }
+                        .padding(.horizontal)
 
                         Chart {
-                            ForEach(last7DaysData, id: \.date) { dataPoint in
+                            ForEach(chartData, id: \.date) { dataPoint in
                                 BarMark(
-                                    x: .value("日付", dataPoint.date, unit: .day),
+                                    x: .value("日付", dataPoint.date, unit: chartPeriod == .last1Year ? .month : .day),
                                     y: .value(displayMode == .count ? "回数" : "時間 (分)", dataPoint.value)
                                 )
                                 .foregroundStyle(Color.blue.gradient)
                             }
                         }
                         .chartXAxis {
-                            AxisMarks(values: .stride(by: .day)) { value in
+                            AxisMarks(values: .stride(by: chartPeriod == .last1Year ? .month : .day)) { value in
                                 AxisGridLine()
-                                AxisValueLabel(format: .dateTime.month().day())
+                                if chartPeriod == .last1Year {
+                                    AxisValueLabel(format: .dateTime.month())
+                                } else {
+                                    AxisValueLabel(format: .dateTime.month().day())
+                                }
                             }
                         }
                         .frame(height: 200)
@@ -204,11 +310,121 @@ struct ReflectView: View {
                             }
                         }
                     }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("最近達成したタスク")
+                            .font(.headline)
+                            .padding(.horizontal)
+
+                        let recentTasks = tasks.filter { $0.completedDate != nil }
+                                              .sorted { $0.completedDate! > $1.completedDate! }
+                                              .prefix(5)
+
+                        if recentTasks.isEmpty {
+                            Text("まだ達成したタスクがありません。")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal)
+                        } else {
+                            ForEach(recentTasks) { task in
+                                let days = daysTaken(for: task)
+                                let totalMinutes = task.pomodoroSessions?.reduce(0) { $0 + $1.duration / 60.0 } ?? 0
+                                let hours = Int(totalMinutes) / 60
+                                let minutes = Int(totalMinutes) % 60
+                                let timeString = hours > 0 ? "\(hours)時間\(minutes)分" : "\(minutes)分"
+
+                                Text("🎉 \(task.title) を達成！ \(days)日かかりました。合計で\(timeString)取り組みました")
+                                    .font(.subheadline)
+                                    .padding()
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(Color(UIColor.secondarySystemBackground))
+                                    .cornerRadius(8)
+                                    .padding(.horizontal)
+                            }
+                        }
+                    }
                 }
                 .padding(.vertical)
             }
             .navigationTitle("振り返り")
+            .overlay {
+                if let selectedDate = selectedDate {
+                    Color.black.opacity(0.3)
+                        .ignoresSafeArea()
+                        .onTapGesture {
+                            saveJournal(for: selectedDate)
+                            self.selectedDate = nil
+                        }
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("\(calendar.component(.month, from: selectedDate))月\(calendar.component(.day, from: selectedDate))日の詳細")
+                            .font(.headline)
+
+                        let dailySessions = sessionsByDate[selectedDate] ?? []
+                        let totalMinutes = dailySessions.reduce(0) { $0 + $1.duration / 60.0 }
+                        let hours = Int(totalMinutes) / 60
+                        let minutes = Int(totalMinutes) % 60
+                        Text("取り組んだ時間: \(hours > 0 ? "\(hours)h " : "")\(minutes)m")
+                            .font(.subheadline)
+
+                        let dailyTasks = completedTasksByDate[selectedDate] ?? []
+                        if !dailyTasks.isEmpty {
+                            Text("達成したタスク:")
+                                .font(.subheadline)
+                                .fontWeight(.bold)
+                            ForEach(dailyTasks) { task in
+                                Text("・ \(task.title)")
+                                    .font(.caption)
+                            }
+                        }
+
+                        Text("コメント")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                        TextEditor(text: $journalContent)
+                            .frame(height: 80)
+                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.gray.opacity(0.5)))
+
+                        Button("閉じる") {
+                            saveJournal(for: selectedDate)
+                            self.selectedDate = nil
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                    }
+                    .padding()
+                    .background(Color(UIColor.systemBackground))
+                    .cornerRadius(12)
+                    .shadow(radius: 10)
+                    .padding(.horizontal, 24)
+                }
+            }
         }
+    }
+
+    private func saveJournal(for date: Date) {
+        let trimmedContent = journalContent.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedContent.isEmpty {
+            if let existing = journalsByDate[date] {
+                modelContext.delete(existing)
+            }
+        } else {
+            if let existing = journalsByDate[date] {
+                existing.content = journalContent
+            } else {
+                let newJournal = JournalEntry(date: date, content: journalContent)
+                modelContext.insert(newJournal)
+            }
+        }
+        try? modelContext.save()
+    }
+
+    private func daysTaken(for task: Task) -> Int {
+        guard let start = task.startDate, let end = task.completedDate else { return 1 }
+        let startDay = calendar.startOfDay(for: start)
+        let endDay = calendar.startOfDay(for: end)
+        let components = calendar.dateComponents([.day], from: startDay, to: endDay)
+        return max(1, (components.day ?? 0) + 1)
     }
 }
 
