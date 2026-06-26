@@ -130,6 +130,16 @@ struct TaskManagementView: View {
                         Image(systemName: "plus")
                     }
                 }
+
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button("達成済みタスクを一斉削除", role: .destructive) {
+                            deleteAllCompletedTasks()
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                }
             }
             .sheet(isPresented: $isShowingAddCategorySheet) {
                 AddCategorySheet(
@@ -216,6 +226,22 @@ struct TaskManagementView: View {
             for index in offsets {
                 modelContext.delete(filteredTasks[index])
             }
+        }
+    }
+
+    private func deleteAllCompletedTasks() {
+        let completedTasks = tasks.filter { task in
+            if viewMode == .rest {
+                return task.isRest && task.status == .done
+            } else {
+                return !task.isRest && task.category?.id == selectedCategory?.id && task.status == .done
+            }
+        }
+        withAnimation {
+            for task in completedTasks {
+                modelContext.delete(task)
+            }
+            try? modelContext.save()
         }
     }
 }
@@ -604,10 +630,13 @@ struct TaskRowView: View {
             switch task.status {
             case .todo:
                 task.status = .done
+                task.completedDate = Date()
             case .inProgress:
                 task.status = .done
+                task.completedDate = Date()
             case .done:
                 task.status = .todo
+                task.completedDate = nil
             }
         }
     }

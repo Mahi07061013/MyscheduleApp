@@ -229,47 +229,6 @@ struct ReflectView: View {
                         .padding(.horizontal)
                     }
 
-                    if let selectedDate = selectedDate {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("\(calendar.component(.month, from: selectedDate))月\(calendar.component(.day, from: selectedDate))日の詳細")
-                                .font(.headline)
-
-                            let dailySessions = sessionsByDate[selectedDate] ?? []
-                            let totalMinutes = dailySessions.reduce(0) { $0 + $1.duration / 60.0 }
-                            let hours = Int(totalMinutes) / 60
-                            let minutes = Int(totalMinutes) % 60
-                            Text("取り組んだ時間: \(hours > 0 ? "\(hours)h " : "")\(minutes)m")
-                                .font(.subheadline)
-
-                            let dailyTasks = completedTasksByDate[selectedDate] ?? []
-                            if !dailyTasks.isEmpty {
-                                Text("達成したタスク:")
-                                    .font(.subheadline)
-                                    .fontWeight(.bold)
-                                ForEach(dailyTasks) { task in
-                                    Text("・ \(task.title)")
-                                        .font(.caption)
-                                }
-                            }
-
-                            Text("コメント")
-                                .font(.subheadline)
-                                .fontWeight(.bold)
-                            TextEditor(text: $journalContent)
-                                .frame(height: 80)
-                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.gray.opacity(0.5)))
-
-                            Button("保存") {
-                                saveJournal(for: selectedDate)
-                            }
-                            .buttonStyle(.borderedProminent)
-                        }
-                        .padding()
-                        .background(Color(UIColor.secondarySystemBackground))
-                        .cornerRadius(12)
-                        .padding(.horizontal)
-                    }
-
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Text("実績グラフ")
@@ -388,15 +347,74 @@ struct ReflectView: View {
                 .padding(.vertical)
             }
             .navigationTitle("振り返り")
+            .overlay {
+                if let selectedDate = selectedDate {
+                    Color.black.opacity(0.3)
+                        .ignoresSafeArea()
+                        .onTapGesture {
+                            saveJournal(for: selectedDate)
+                            self.selectedDate = nil
+                        }
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("\(calendar.component(.month, from: selectedDate))月\(calendar.component(.day, from: selectedDate))日の詳細")
+                            .font(.headline)
+
+                        let dailySessions = sessionsByDate[selectedDate] ?? []
+                        let totalMinutes = dailySessions.reduce(0) { $0 + $1.duration / 60.0 }
+                        let hours = Int(totalMinutes) / 60
+                        let minutes = Int(totalMinutes) % 60
+                        Text("取り組んだ時間: \(hours > 0 ? "\(hours)h " : "")\(minutes)m")
+                            .font(.subheadline)
+
+                        let dailyTasks = completedTasksByDate[selectedDate] ?? []
+                        if !dailyTasks.isEmpty {
+                            Text("達成したタスク:")
+                                .font(.subheadline)
+                                .fontWeight(.bold)
+                            ForEach(dailyTasks) { task in
+                                Text("・ \(task.title)")
+                                    .font(.caption)
+                            }
+                        }
+
+                        Text("コメント")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                        TextEditor(text: $journalContent)
+                            .frame(height: 80)
+                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.gray.opacity(0.5)))
+
+                        Button("閉じる") {
+                            saveJournal(for: selectedDate)
+                            self.selectedDate = nil
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                    }
+                    .padding()
+                    .background(Color(UIColor.systemBackground))
+                    .cornerRadius(12)
+                    .shadow(radius: 10)
+                    .padding(.horizontal, 24)
+                }
+            }
         }
     }
 
     private func saveJournal(for date: Date) {
-        if let existing = journalsByDate[date] {
-            existing.content = journalContent
+        let trimmedContent = journalContent.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedContent.isEmpty {
+            if let existing = journalsByDate[date] {
+                modelContext.delete(existing)
+            }
         } else {
-            let newJournal = JournalEntry(date: date, content: journalContent)
-            modelContext.insert(newJournal)
+            if let existing = journalsByDate[date] {
+                existing.content = journalContent
+            } else {
+                let newJournal = JournalEntry(date: date, content: journalContent)
+                modelContext.insert(newJournal)
+            }
         }
         try? modelContext.save()
     }
