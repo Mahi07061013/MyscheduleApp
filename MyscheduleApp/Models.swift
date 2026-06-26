@@ -88,6 +88,19 @@ final class Task {
 }
 
 @Model
+final class JournalEntry {
+    @Attribute(.unique) var id: UUID
+    var date: Date
+    var content: String
+
+    init(id: UUID = UUID(), date: Date = Date(), content: String = "") {
+        self.id = id
+        self.date = date
+        self.content = content
+    }
+}
+
+@Model
 final class PomodoroSession {
     @Attribute(.unique) var id: UUID
     var date: Date
