@@ -159,7 +159,7 @@ struct FocusView: View {
                         .animation(.linear, value: timerManager.progress)
 
                     Menu {
-                        Picker("時間", selection: $timerManager.timerManager.defaultDurationMinutes) {
+                        Picker("時間", selection: $timerManager.defaultDurationMinutes) {
                             ForEach(Array(stride(from: 5, through: 60, by: 5)), id: \.self) { minutes in
                                 Text("\(minutes)分").tag(minutes)
                             }
@@ -170,7 +170,7 @@ struct FocusView: View {
                             .foregroundColor(.primary)
                     }
                     .disabled(timerManager.isRunning)
-                    .onChange(of: timerManager.timerManager.defaultDurationMinutes) { _, _ in
+                    .onChange(of: timerManager.defaultDurationMinutes) { _, _ in
                         if !timerManager.isRunning && timerManager.timeRemaining == timerManager.defaultDuration {
                             timerManager.timeRemaining = timerManager.defaultDuration
                         } else if !timerManager.isRunning {
@@ -226,7 +226,7 @@ struct FocusView: View {
                 if selectedTask == nil {
                     selectedTask = incompleteTasks.first
                 }
-                if !timerManager.isRunning && timerManager.timeRemaining == 1500 && timerManager.timerManager.defaultDurationMinutes != 25 {
+                if !timerManager.isRunning && timerManager.timeRemaining == 1500 && timerManager.defaultDurationMinutes != 25 {
                     timerManager.timeRemaining = timerManager.defaultDuration
                 } else if !timerManager.isRunning && timerManager.timeRemaining != timerManager.defaultDuration {
                     // keep it
@@ -236,7 +236,7 @@ struct FocusView: View {
             }
             .alert("本当にやめますか？", isPresented: $showingStopAlert) {
                 Button("やめる", role: .destructive) {
-                    timerManager.timerManager.resetTimer()
+                    timerManager.resetTimer()
                 }
                 Button("キャンセル", role: .cancel) { }
             } message: {
@@ -246,67 +246,6 @@ struct FocusView: View {
                 AddTaskView(selectedCategory: selectedCategoryForFocus, initialIsRest: focusMode == .rest, showCategoryCreation: focusMode == .focus)
             }
         }
-    }
-
-    private func timerManager.requestNotificationAuthorization() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
-    }
-
-    private func scheduleNotification() {
-        cancelNotification()
-
-        let content = UNMutableNotificationContent()
-        content.title = "時間です！"
-        content.body = "タイマーが終了しました。"
-        content.sound = .default
-
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: timerManager.timeRemaining > 0 ? timerManager.timeRemaining : 1, repeats: false)
-        let request = UNNotificationRequest(identifier: "timerFinished", content: content, trigger: trigger)
-
-        UNUserNotificationCenter.current().add(request)
-    }
-
-    private func cancelNotification() {
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["timerFinished"])
-    }
-
-    private func timerManager.startTimer() {
-        timerManager.isRunning = true
-        scheduleNotification()
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
-            if timerManager.timeRemaining > 0 {
-                timerManager.timeRemaining -= 1
-            } else {
-                timerFinished()
-            }
-        }
-    }
-
-    private func timerManager.pauseTimer() {
-        timerManager.isRunning = false
-        timer?.invalidate()
-        timer = nil
-        cancelNotification()
-    }
-
-    private func timerManager.resetTimer() {
-        timerManager.pauseTimer()
-        timerManager.timeRemaining = timerManager.defaultDuration
-    }
-
-    private func timerManager.timerManager.resetTimer() {
-        timerManager.pauseTimer()
-        timerManager.timeRemaining = timerManager.defaultDuration
-    }
-
-    private func timerFinished() {
-        timerManager.pauseTimer()
-        timerManager.timeRemaining = 0
-
-        let newSession = PomodoroSession(date: Date(), duration: timerManager.defaultDuration, task: selectedTask)
-        modelContext.insert(newSession)
-
-        showingFinishedAlert = true
     }
 
     private func moodEmoji(for rating: Int) -> String {
