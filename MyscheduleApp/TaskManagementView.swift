@@ -225,6 +225,7 @@ struct CategoryTabItemView: View {
     let selectedCategory: TaskCategory?
     let onTap: () -> Void
     let onDelete: () -> Void
+    let onEdit: () -> Void
 
     var body: some View {
         HStack(spacing: 6) {
@@ -247,6 +248,9 @@ struct CategoryTabItemView: View {
         .cornerRadius(16)
         .onTapGesture(perform: onTap)
         .contextMenu {
+            Button(action: onEdit) {
+                Label("名前 / 色を変更", systemImage: "pencil")
+            }
             Button(role: .destructive, action: onDelete) {
                 Label("削除", systemImage: "trash")
             }
