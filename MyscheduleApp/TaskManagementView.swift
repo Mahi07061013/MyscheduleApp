@@ -102,18 +102,33 @@ struct TaskManagementView: View {
 
                 List {
                     ForEach(tasks.filter { task in
+                        if task.parentTask != nil { return false }
                         if viewMode == .rest {
-                            return task.isRest
+                            return task.isRest == true
                         } else {
-                            return !task.isRest && task.category?.id == selectedCategory?.id
+                            return task.isRest == false && task.category?.id == selectedCategory?.id
                         }
                     }.sorted(by: { $0.orderIndex < $1.orderIndex })) { task in
-                        Button(action: {
-                            selectedTaskForDetail = task
-                        }) {
-                            TaskRowView(task: task)
+                        VStack(alignment: .leading, spacing: 0) {
+                            Button(action: {
+                                selectedTaskForDetail = task
+                            }) {
+                                TaskRowView(task: task)
+                            }
+                            .buttonStyle(.plain)
+
+                            if let subtasks = task.subtasks {
+                                ForEach(subtasks.sorted(by: { $0.orderIndex < $1.orderIndex })) { subtask in
+                                    Button(action: {
+                                        selectedTaskForDetail = subtask
+                                    }) {
+                                        TaskRowView(task: subtask)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .padding(.leading, 32)
+                                }
+                            }
                         }
-                        .buttonStyle(.plain)
                     }
                     .onDelete(perform: deleteTasks)
                     .onMove(perform: moveTasks)
@@ -169,10 +184,11 @@ struct TaskManagementView: View {
 
     private func moveTasks(from source: IndexSet, to destination: Int) {
         var filteredTasks = tasks.filter { task in
+            if task.parentTask != nil { return false }
             if viewMode == .rest {
-                return task.isRest
+                return task.isRest == true
             } else {
-                return !task.isRest && task.category?.id == selectedCategory?.id
+                return task.isRest == false && task.category?.id == selectedCategory?.id
             }
         }.sorted(by: { $0.orderIndex < $1.orderIndex })
 
@@ -206,10 +222,11 @@ struct TaskManagementView: View {
 
     private func deleteTasks(offsets: IndexSet) {
         let filteredTasks = tasks.filter { task in
+            if task.parentTask != nil { return false }
             if viewMode == .rest {
-                return task.isRest
+                return task.isRest == true
             } else {
-                return !task.isRest && task.category?.id == selectedCategory?.id
+                return task.isRest == false && task.category?.id == selectedCategory?.id
             }
         }.sorted(by: { $0.orderIndex < $1.orderIndex })
         withAnimation {

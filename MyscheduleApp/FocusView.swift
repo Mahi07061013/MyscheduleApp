@@ -23,9 +23,9 @@ struct FocusView: View {
         allTasks.filter { task in
             guard task.status != .done else { return false }
             if focusMode == .rest {
-                return task.isRest
+                return task.isRest == true
             } else {
-                return !task.isRest && task.category?.id == selectedCategoryForFocus?.id
+                return task.isRest == false && task.category?.id == selectedCategoryForFocus?.id
             }
         }
     }

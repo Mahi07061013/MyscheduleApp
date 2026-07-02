@@ -261,7 +261,7 @@ struct ReflectView: View {
                             .font(.headline)
                             .padding(.horizontal)
 
-                        let recentTasks = allTasks.filter { $0.status == .done && !$0.isRest }.sorted { ($0.completedDate ?? Date.distantPast) > ($1.completedDate ?? Date.distantPast) }.prefix(10)
+                        let recentTasks = allTasks.filter { $0.status == .done && $0.isRest == false }.sorted { ($0.completedDate ?? Date.distantPast) > ($1.completedDate ?? Date.distantPast) }.prefix(10)
 
                         if recentTasks.isEmpty {
                             Text("まだ達成したタスクはありません")
