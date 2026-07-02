@@ -346,6 +346,7 @@ struct AddTaskView: View {
     @State private var isCreatingNewCategory = false
     @State private var title: String = ""
     @State private var status: TaskStatus = .todo
+    @State private var estimatedSessions: Int = 1
     @State private var hasStartDate = false
     @State private var startDate = Date()
     @State private var hasPriority = false
@@ -368,6 +369,10 @@ struct AddTaskView: View {
                         ForEach(TaskStatus.allCases, id: \.self) { status in
                             Text(status.rawValue).tag(status)
                         }
+                    }
+
+                    Stepper(value: $estimatedSessions, in: 1...100) {
+                        Text("予想ポモドーロ数: \(estimatedSessions)")
                     }
 
                     if showCategoryCreation && !initialIsRest {
@@ -494,8 +499,9 @@ struct AddTaskView: View {
         let newTask = Task(
             title: title.trimmingCharacters(in: .whitespacesAndNewlines),
             status: status,
-            startDate: hasStartDate ? startDate : nil,
-            priority: hasPriority ? priority : nil,
+            startDate: hasStartDate ? startDate : Date.distantPast,
+            priority: hasPriority ? priority : .low,
+            estimatedSessions: estimatedSessions,
             category: finalCategory,
             tags: Array(selectedTags),
             isRest: initialIsRest
@@ -545,13 +551,15 @@ struct TaskRowView: View {
                     .foregroundColor(textColor)
                     .font(.headline)
 
-                if task.startDate != nil || task.priority != nil {
+                if task.startDate != Date.distantPast || task.priority != .low {
                     HStack(spacing: 8) {
-                        if let startDate = task.startDate {
+                        let startDate = task.startDate
+                        if startDate != Date.distantPast {
                             Label(startDate.formatted(date: .abbreviated, time: .shortened), systemImage: "calendar")
                         }
 
-                        if let priority = task.priority {
+                        let priority = task.priority
+                        if priority != .low {
                             Label(priority.rawValue, systemImage: "exclamationmark.circle")
                                 .foregroundColor(priorityColor(priority))
                         }

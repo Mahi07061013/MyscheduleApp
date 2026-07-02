@@ -3,23 +3,24 @@ import SwiftUI
 import SwiftData
 
 struct Provider: TimelineProvider {
-    @MainActor
     func placeholder(in context: Context) -> SimpleEntry {
         SimpleEntry(date: Date(), lastCompletedDate: nil)
     }
 
-    @MainActor
     func getSnapshot(in context: Context, completion: @escaping (SimpleEntry) -> ()) {
-        completion(SimpleEntry(date: Date(), lastCompletedDate: fetchLastCompletedDate()))
+        Task { @MainActor in
+            completion(SimpleEntry(date: Date(), lastCompletedDate: fetchLastCompletedDate()))
+        }
     }
 
-    @MainActor
     func getTimeline(in context: Context, completion: @escaping (Timeline<Entry>) -> ()) {
-        let lastDate = fetchLastCompletedDate()
-        let entry = SimpleEntry(date: Date(), lastCompletedDate: lastDate)
+        Task { @MainActor in
+            let lastDate = fetchLastCompletedDate()
+            let entry = SimpleEntry(date: Date(), lastCompletedDate: lastDate)
 
-        let timeline = Timeline(entries: [entry], policy: .after(Date().addingTimeInterval(60 * 5))) // update every 5 minutes
-        completion(timeline)
+            let timeline = Timeline(entries: [entry], policy: .after(Date().addingTimeInterval(60 * 5))) // update every 5 minutes
+            completion(timeline)
+        }
     }
 
     @MainActor

@@ -242,6 +242,38 @@ struct FocusView: View {
             } message: {
                 Text("進行状況は保存されません。")
             }
+            .alert("新規タスク", isPresented: $showingInlineTaskAlert) {
+                TextField("タスク名", text: $newInlineTaskTitle)
+                Button("追加") {
+                    let title = newInlineTaskTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !title.isEmpty {
+                        let newTask = Task(title: title, category: selectedCategoryForFocus, isRest: focusMode == .rest)
+                        modelContext.insert(newTask)
+                        selectedTask = newTask
+                    }
+                }
+                Button("キャンセル", role: .cancel) { }
+            }
+            .sheet(isPresented: $timerManager.showingMoodSheet) {
+                NavigationStack {
+                    VStack(spacing: 20) {
+                        Text("今の気分は？")
+                            .font(.headline)
+                        HStack(spacing: 16) {
+                            ForEach(1...5, id: \.self) { rating in
+                                Button(action: {
+                                    saveSession(with: rating)
+                                }) {
+                                    Text(moodEmoji(for: rating))
+                                        .font(.system(size: 40))
+                                }
+                            }
+                        }
+                    }
+                    .padding()
+                    .presentationDetents([.fraction(0.3)])
+                }
+            }
             .sheet(isPresented: $isShowingAddTaskSheet) {
                 AddTaskView(selectedCategory: selectedCategoryForFocus, initialIsRest: focusMode == .rest, showCategoryCreation: focusMode == .focus)
             }
