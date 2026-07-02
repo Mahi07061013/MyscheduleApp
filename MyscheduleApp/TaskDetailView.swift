@@ -36,6 +36,10 @@ struct TaskDetailView: View {
                         }
                     }
 
+                    Stepper(value: $task.estimatedSessions, in: 1...100) {
+                        Text("予想ポモドーロ数: \(task.estimatedSessions)")
+                    }
+
                     Picker("文字色", selection: $task.textColorHex) {
                         ForEach(colorOptions, id: \.name) { option in
                             Text(option.name).tag(option.hex)
@@ -64,14 +68,14 @@ struct TaskDetailView: View {
 
                 Section(header: Text("日付")) {
                     let hasStartDate = Binding<Bool>(
-                        get: { task.startDate != nil },
-                        set: { if !$0 { task.startDate = nil } else { task.startDate = Date() } }
+                        get: { task.startDate != Date.distantPast },
+                        set: { if !$0 { task.startDate = Date.distantPast } else { task.startDate = Date() } }
                     )
 
                     Toggle("開始日を設定", isOn: hasStartDate)
                     if hasStartDate.wrappedValue {
                         DatePicker("開始日", selection: Binding(
-                            get: { task.startDate ?? Date() },
+                            get: { task.startDate },
                             set: { task.startDate = $0 }
                         ), displayedComponents: [.date, .hourAndMinute])
                     }
@@ -88,14 +92,14 @@ struct TaskDetailView: View {
 
                 Section(header: Text("優先度")) {
                     let hasPriority = Binding<Bool>(
-                        get: { task.priority != nil },
-                        set: { if !$0 { task.priority = nil } else { task.priority = .medium } }
+                        get: { task.priority != .low },
+                        set: { if !$0 { task.priority = .low } else { task.priority = .medium } }
                     )
 
                     Toggle("優先度を設定", isOn: hasPriority)
                     if hasPriority.wrappedValue {
                         Picker("優先度", selection: Binding(
-                            get: { task.priority ?? .medium },
+                            get: { task.priority },
                             set: { task.priority = $0 }
                         )) {
                             ForEach(TaskPriority.allCases, id: \.self) { priority in

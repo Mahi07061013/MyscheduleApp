@@ -3,13 +3,15 @@ import Charts
 import SwiftData
 
 enum DisplayMode: String, CaseIterable {
-    case count = "達成回数"
+    case count = "取り組んだ回数"
     case duration = "取り組んだ時間"
 }
 
 struct ReflectView: View {
     @Query var sessions: [PomodoroSession]
+    @Query var allTasks: [Task]
     @State private var displayMode: DisplayMode = .count
+    @State private var showingRankingSheet = false
 
     // MARK: - Helpers
 
@@ -18,7 +20,7 @@ struct ReflectView: View {
     }
 
     private var filteredSessions: [PomodoroSession] {
-        sessions.filter { $0.task?.isRest != true }
+        sessions.filter { $0.task?.isRest == false }
     }
 
     private var sessionsByDate: [Date: [PomodoroSession]] {
@@ -28,10 +30,10 @@ struct ReflectView: View {
     }
 
     // Last 7 days aggregation
-    private var last7DaysData: [(date: Date, value: Double)] {
+    private var last30DaysData: [(date: Date, value: Double)] {
         let today = calendar.startOfDay(for: Date())
         var data: [(date: Date, value: Double)] = []
-        for i in (0..<7).reversed() {
+        for i in (0..<30).reversed() {
             guard let date = calendar.date(byAdding: .day, value: -i, to: today) else { continue }
             let dailySessions = sessionsByDate[date] ?? []
             let value: Double = displayMode == .count
@@ -48,10 +50,11 @@ struct ReflectView: View {
         let name: String
         let colorHex: String?
         let value: Double
+        let averageMood: Double?
     }
 
     private var categoryData: [CategoryData] {
-        var grouped: [String: (colorHex: String?, value: Double)] = [:]
+        var grouped: [String: (colorHex: String?, value: Double, moods: [Int])] = [:]
 
         for session in filteredSessions {
             let categoryName = session.task?.category?.name ?? "未分類"
@@ -61,15 +64,22 @@ struct ReflectView: View {
                 ? 1.0
                 : session.duration / 60.0 // minutes
 
-            if let existing = grouped[categoryName] {
-                grouped[categoryName] = (colorHex: existing.colorHex ?? colorHex, value: existing.value + amount)
+            if var existing = grouped[categoryName] {
+                existing.colorHex = existing.colorHex ?? colorHex
+                existing.value += amount
+                if let mood = session.moodRating { existing.moods.append(mood) }
+                grouped[categoryName] = existing
             } else {
-                grouped[categoryName] = (colorHex: colorHex, value: amount)
+                var moods: [Int] = []
+                if let mood = session.moodRating { moods.append(mood) }
+                grouped[categoryName] = (colorHex: colorHex, value: amount, moods: moods)
             }
         }
 
-        return grouped.map { CategoryData(name: $0.key, colorHex: $0.value.colorHex, value: $0.value.value) }
-            .sorted { $0.value > $1.value }
+        return grouped.map { key, data in
+            let avgMood = data.moods.isEmpty ? nil : Double(data.moods.reduce(0, +)) / Double(data.moods.count)
+            return CategoryData(name: key, colorHex: data.colorHex, value: data.value, averageMood: avgMood)
+        }.sorted { $0.value > $1.value }
     }
 
     private var totalCategoryValue: Double {
@@ -105,14 +115,6 @@ struct ReflectView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
-                    Picker("表示モード", selection: $displayMode) {
-                        ForEach(DisplayMode.allCases, id: \.self) { mode in
-                            Text(mode.rawValue).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .padding(.horizontal)
-
                     VStack(alignment: .leading, spacing: 8) {
                         Text("カレンダー")
                             .font(.headline)
@@ -136,13 +138,23 @@ struct ReflectView: View {
                         .padding(.horizontal)
                     }
 
+                    Picker("表示モード", selection: $displayMode) {
+                        ForEach(DisplayMode.allCases, id: \.self) { mode in
+                            Text(mode.rawValue).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal)
+
+
+
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("直近7日間の実績")
+                        Text("直近30日間の実績")
                             .font(.headline)
                             .padding(.horizontal)
 
                         Chart {
-                            ForEach(last7DaysData, id: \.date) { dataPoint in
+                            ForEach(last30DaysData, id: \.date) { dataPoint in
                                 BarMark(
                                     x: .value("日付", dataPoint.date, unit: .day),
                                     y: .value(displayMode == .count ? "回数" : "時間 (分)", dataPoint.value)
@@ -151,7 +163,7 @@ struct ReflectView: View {
                             }
                         }
                         .chartXAxis {
-                            AxisMarks(values: .stride(by: .day)) { value in
+                            AxisMarks(values: .stride(by: .day, count: 10)) { value in
                                 AxisGridLine()
                                 AxisValueLabel(format: .dateTime.month().day())
                             }
@@ -203,11 +215,115 @@ struct ReflectView: View {
                                 }
                             }
                         }
+
+                        // Ranking List
+                        VStack(spacing: 8) {
+                            ForEach(Array(categoryData.prefix(5).enumerated()), id: \.element.id) { index, data in
+                                HStack {
+                                    Text("\(index + 1)位")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                        .frame(width: 30, alignment: .leading)
+                                    Circle()
+                                        .fill(data.colorHex != nil ? Color(hex: data.colorHex!)! : Color.blue)
+                                        .frame(width: 10, height: 10)
+                                    Text(data.name)
+                                        .font(.subheadline)
+                                    Spacer()
+                                    if let mood = data.averageMood {
+                                        Text(String(format: "気分: %.1f", mood))
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    let valText = displayMode == .count ? "\(Int(data.value))回" : "\(Int(data.value))m"
+                                    Text(valText)
+                                        .font(.subheadline)
+                                        .bold()
+                                }
+                                .padding(.vertical, 4)
+                            }
+
+                            if categoryData.count > 5 {
+                                Button("詳細を表示") {
+                                    showingRankingSheet = true
+                                }
+                                .font(.caption)
+                                .foregroundColor(.blue)
+                            }
+                        }
+                        .padding(.horizontal)
+                        .padding(.top, 8)
+                    }
+
+                    // Recent Tasks
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("最近達成したタスク一覧")
+                            .font(.headline)
+                            .padding(.horizontal)
+
+                        let recentTasks = allTasks.filter { $0.status == .done && $0.isRest == false }.sorted { ($0.completedDate ?? Date.distantPast) > ($1.completedDate ?? Date.distantPast) }.prefix(10)
+
+                        if recentTasks.isEmpty {
+                            Text("まだ達成したタスクはありません")
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal)
+                        } else {
+                            ForEach(Array(recentTasks)) { task in
+                                HStack {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundColor(.green)
+                                    VStack(alignment: .leading) {
+                                        Text(task.title)
+                                            .font(.subheadline)
+                                        if let date = task.completedDate {
+                                            Text(date.formatted())
+                                                .font(.caption2)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                    Spacer()
+                                }
+                                .padding(.horizontal)
+                                .padding(.vertical, 4)
+                            }
+                        }
                     }
                 }
                 .padding(.vertical)
             }
             .navigationTitle("振り返り")
+        }
+        .sheet(isPresented: $showingRankingSheet) {
+            NavigationStack {
+                List {
+                    ForEach(Array(categoryData.enumerated()), id: \.element.id) { index, data in
+                        HStack {
+                            Text("\(index + 1)位")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .frame(width: 30, alignment: .leading)
+                            Circle()
+                                .fill(data.colorHex != nil ? Color(hex: data.colorHex!)! : Color.blue)
+                                .frame(width: 10, height: 10)
+                            Text(data.name)
+                                .font(.subheadline)
+                            Spacer()
+                            if let mood = data.averageMood {
+                                Text(String(format: "気分: %.1f", mood))
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                            let valText = displayMode == .count ? "\(Int(data.value))回" : "\(Int(data.value))m"
+                            Text(valText)
+                                .font(.subheadline)
+                                .bold()
+                        }
+                    }
+                }
+                .navigationTitle("ランキング詳細")
+                .navigationBarTitleDisplayMode(.inline)
+            }
+            .presentationDetents([.medium, .large])
         }
     }
 }
