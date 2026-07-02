@@ -8,13 +8,13 @@ struct Provider: TimelineProvider {
     }
 
     func getSnapshot(in context: Context, completion: @escaping (SimpleEntry) -> ()) {
-        Swift.Task { @MainActor in
+        _Concurrency.Task { @MainActor in
             completion(SimpleEntry(date: Date(), lastCompletedDate: fetchLastCompletedDate()))
         }
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<Entry>) -> ()) {
-        Swift.Task { @MainActor in
+        _Concurrency.Task { @MainActor in
             let lastDate = fetchLastCompletedDate()
             let entry = SimpleEntry(date: Date(), lastCompletedDate: lastDate)
 
