@@ -27,6 +27,8 @@ struct TaskManagementView: View {
     @State private var isShowingAddTaskSheet = false
     @State private var isShowingAddCategorySheet = false
     @State private var selectedTaskForDetail: Task?
+    @State private var categoryToEdit: TaskCategory?
+    @State private var isShowingEditCategorySheet = false
 
     private var listBackgroundColor: Color {
         if viewMode == .rest {
@@ -110,6 +112,12 @@ struct TaskManagementView: View {
                     }) {
                         Image(systemName: "plus")
                     }
+                }
+            }
+
+            .sheet(isPresented: $isShowingEditCategorySheet) {
+                if let categoryToEdit = categoryToEdit {
+                    EditCategorySheet(category: categoryToEdit)
                 }
             }
             .sheet(isPresented: $isShowingAddCategorySheet) {
@@ -766,5 +774,22 @@ struct TaskBottomButtonsView: View {
             }
         }
         .padding()
+    }
+}
+
+struct TaskListView: View {
+    var filteredTasksForList: [Task]
+    @Binding var selectedTaskForDetail: Task?
+    var onDelete: (IndexSet) -> Void
+    var onMove: (IndexSet, Int) -> Void
+
+    var body: some View {
+        List {
+            ForEach(filteredTasksForList) { task in
+                TaskListRowView(task: task, selectedTaskForDetail: $selectedTaskForDetail)
+            }
+            .onDelete(perform: onDelete)
+            .onMove(perform: onMove)
+        }
     }
 }
