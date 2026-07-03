@@ -35,6 +35,7 @@ struct FocusView: View {
     @State private var newInlineTaskTitle = ""
 
     var body: some View {
+        @Bindable var bindableTimerManager = timerManager
         NavigationStack {
             VStack {
                 Picker("モード", selection: $focusMode) {
@@ -62,40 +63,11 @@ struct FocusView: View {
 
                 Spacer()
 
-                ZStack {
-                    Circle()
-                        .stroke(lineWidth: 20.0)
-                        .opacity(0.3)
-                        .foregroundColor(.gray)
-
-                    Circle()
-                        .trim(from: 0.0, to: CGFloat(min(timerManager.progress, 1.0)))
-                        .stroke(style: StrokeStyle(lineWidth: 20.0, lineCap: .round, lineJoin: .round))
-                        .foregroundColor(focusMode == .focus ? .blue : .green)
-                        .rotationEffect(Angle(degrees: 270.0))
-                        .animation(.linear, value: timerManager.progress)
-
-                    Menu {
-                        Picker("時間", selection: $timerManager.defaultDurationMinutes) {
-                            ForEach(Array(stride(from: 5, through: 60, by: 5)), id: \.self) { minutes in
-                                Text("\(minutes)分").tag(minutes)
-                            }
-                        }
-                    } label: {
-                        Text(timerManager.timeString)
-                            .font(.system(size: 60, weight: .bold, design: .monospaced))
-                            .foregroundColor(.primary)
-                    }
-                    .disabled(timerManager.isRunning)
-                    .onChange(of: timerManager.defaultDurationMinutes) { _, _ in
-                        if !timerManager.isRunning && timerManager.timeRemaining == timerManager.defaultDuration {
-                            timerManager.timeRemaining = timerManager.defaultDuration
-                        } else if !timerManager.isRunning {
-                             timerManager.timeRemaining = timerManager.defaultDuration
-                        }
-                    }
-                }
-                .padding(40)
+                FocusTimerView(
+                    timerManager: timerManager,
+                    bindableTimerManager: $bindableTimerManager,
+                    focusMode: focusMode
+                )
 
                 if selectedTask == nil {
                     Text("タスクを設定してください")
@@ -103,38 +75,11 @@ struct FocusView: View {
                         .padding(.bottom, 10)
                 }
 
-                HStack(spacing: 30) {
-                    Button(action: {
-                        if timerManager.isRunning {
-                            timerManager.pauseTimer()
-                        } else {
-                            timerManager.startTimer()
-                        }
-                    }) {
-                        Text(timerManager.isRunning ? "Pause" : "Start")
-                            .font(.title2)
-                            .padding()
-                            .frame(width: 120)
-                            .background(timerManager.isRunning ? Color.yellow : (selectedTask == nil ? Color.gray : Color.blue))
-                            .foregroundColor(.white)
-                            .cornerRadius(10)
-                    }
-                    .disabled(selectedTask == nil)
-
-                    Button(action: {
-                        showingStopAlert = true
-                    }) {
-                        Text("やめる")
-                            .font(.title2)
-                            .padding()
-                            .frame(width: 120)
-                            .background(Color.red)
-                            .foregroundColor(.white)
-                            .cornerRadius(10)
-                    }
-                    .disabled(!timerManager.isRunning && timerManager.timeRemaining == timerManager.defaultDuration)
-                }
-                .padding(.bottom, 50)
+                FocusControlsView(
+                    timerManager: timerManager,
+                    selectedTask: selectedTask,
+                    showingStopAlert: $showingStopAlert
+                )
 
                 Spacer()
             }
@@ -171,7 +116,7 @@ struct FocusView: View {
                 }
                 Button("キャンセル", role: .cancel) { }
             }
-            .sheet(isPresented: $timerManager.showingMoodSheet) {
+            .sheet(isPresented: $bindableTimerManager.showingMoodSheet) {
                 NavigationStack {
                     VStack(spacing: 20) {
                         Text("今の気分は？")
@@ -320,6 +265,90 @@ struct FocusHeaderView: View {
             }
         }
         .padding(.horizontal)
+    }
+}
+
+struct FocusTimerView: View {
+    let timerManager: TimerManager
+    @Binding var bindableTimerManager: TimerManager
+    let focusMode: FocusMode
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(lineWidth: 20.0)
+                .opacity(0.3)
+                .foregroundColor(.gray)
+
+            Circle()
+                .trim(from: 0.0, to: CGFloat(min(timerManager.progress, 1.0)))
+                .stroke(style: StrokeStyle(lineWidth: 20.0, lineCap: .round, lineJoin: .round))
+                .foregroundColor(focusMode == .focus ? .blue : .green)
+                .rotationEffect(Angle(degrees: 270.0))
+                .animation(.linear, value: timerManager.progress)
+
+            Menu {
+                Picker("時間", selection: $bindableTimerManager.defaultDurationMinutes) {
+                    ForEach(Array(stride(from: 5, through: 60, by: 5)), id: \.self) { minutes in
+                        Text("\(minutes)分").tag(minutes)
+                    }
+                }
+            } label: {
+                Text(timerManager.timeString)
+                    .font(.system(size: 60, weight: .bold, design: .monospaced))
+                    .foregroundColor(.primary)
+            }
+            .disabled(timerManager.isRunning)
+            .onChange(of: timerManager.defaultDurationMinutes) { _, _ in
+                if !timerManager.isRunning && timerManager.timeRemaining == timerManager.defaultDuration {
+                    timerManager.timeRemaining = timerManager.defaultDuration
+                } else if !timerManager.isRunning {
+                     timerManager.timeRemaining = timerManager.defaultDuration
+                }
+            }
+        }
+        .padding(40)
+    }
+}
+
+struct FocusControlsView: View {
+    let timerManager: TimerManager
+    let selectedTask: Task?
+    @Binding var showingStopAlert: Bool
+
+    var body: some View {
+        HStack(spacing: 30) {
+            Button(action: {
+                if timerManager.isRunning {
+                    timerManager.pauseTimer()
+                } else {
+                    timerManager.startTimer()
+                }
+            }) {
+                Text(timerManager.isRunning ? "Pause" : "Start")
+                    .font(.title2)
+                    .padding()
+                    .frame(width: 120)
+                    .background(timerManager.isRunning ? Color.yellow : (selectedTask == nil ? Color.gray : Color.blue))
+                    .foregroundColor(.white)
+                    .cornerRadius(10)
+            }
+            .disabled(selectedTask == nil)
+
+            Button(action: {
+                showingStopAlert = true
+            }) {
+                Text("やめる")
+                    .font(.title2)
+                    .padding()
+                    .frame(width: 120)
+                    .background(Color.red)
+                    .foregroundColor(.white)
+                    .cornerRadius(10)
+            }
+            .disabled(!timerManager.isRunning && timerManager.timeRemaining == timerManager.defaultDuration)
+        }
+        .padding(.bottom, 50)
     }
 }
 }
