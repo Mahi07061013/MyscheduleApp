@@ -115,28 +115,11 @@ struct ReflectView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("カレンダー")
-                            .font(.headline)
-                            .padding(.horizontal)
-
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 4) {
-                            ForEach(currentMonthDates, id: \.self) { date in
-                                let isCurrentMonth = calendar.isDate(date, equalTo: Date(), toGranularity: .month)
-                                let hasSessions = !(sessionsByDate[date]?.isEmpty ?? true)
-
-                                RoundedRectangle(cornerRadius: 4)
-                                    .fill(hasSessions ? Color.green.opacity(0.8) : Color.gray.opacity(0.2))
-                                    .frame(height: 40)
-                                    .overlay {
-                                        Text("\(calendar.component(.day, from: date))")
-                                            .font(.caption2)
-                                            .foregroundColor(isCurrentMonth ? .primary : .secondary)
-                                    }
-                            }
-                        }
-                        .padding(.horizontal)
-                    }
+                    ReflectCalendarView(
+                        currentMonthDates: currentMonthDates,
+                        sessionsByDate: sessionsByDate,
+                        calendar: calendar
+                    )
 
                     Picker("表示モード", selection: $displayMode) {
                         ForEach(DisplayMode.allCases, id: \.self) { mode in
@@ -255,39 +238,7 @@ struct ReflectView: View {
                         .padding(.top, 8)
                     }
 
-                    // Recent Tasks
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("最近達成したタスク一覧")
-                            .font(.headline)
-                            .padding(.horizontal)
-
-                        let recentTasks = allTasks.filter { $0.status == .done && $0.isRest == false }.sorted { ($0.completedDate ?? Date.distantPast) > ($1.completedDate ?? Date.distantPast) }.prefix(10)
-
-                        if recentTasks.isEmpty {
-                            Text("まだ達成したタスクはありません")
-                                .foregroundColor(.secondary)
-                                .padding(.horizontal)
-                        } else {
-                            ForEach(Array(recentTasks)) { task in
-                                HStack {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundColor(.green)
-                                    VStack(alignment: .leading) {
-                                        Text(task.title)
-                                            .font(.subheadline)
-                                        if let date = task.completedDate {
-                                            Text(date.formatted())
-                                                .font(.caption2)
-                                                .foregroundColor(.secondary)
-                                        }
-                                    }
-                                    Spacer()
-                                }
-                                .padding(.horizontal)
-                                .padding(.vertical, 4)
-                            }
-                        }
-                    }
+                    ReflectRecentTasksView(allTasks: allTasks)
                 }
                 .padding(.vertical)
             }
@@ -326,6 +277,76 @@ struct ReflectView: View {
             .presentationDetents([.medium, .large])
         }
     }
+
+struct ReflectCalendarView: View {
+    let currentMonthDates: [Date]
+    let sessionsByDate: [Date: [PomodoroSession]]
+    let calendar: Calendar
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("カレンダー")
+                .font(.headline)
+                .padding(.horizontal)
+
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 4) {
+                ForEach(currentMonthDates, id: \.self) { date in
+                    let isCurrentMonth = calendar.isDate(date, equalTo: Date(), toGranularity: .month)
+                    let hasSessions = !(sessionsByDate[date]?.isEmpty ?? true)
+
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(hasSessions ? Color.green.opacity(0.8) : Color.gray.opacity(0.2))
+                        .frame(height: 40)
+                        .overlay {
+                            Text("\(calendar.component(.day, from: date))")
+                                .font(.caption2)
+                                .foregroundColor(isCurrentMonth ? .primary : .secondary)
+                        }
+                }
+            }
+            .padding(.horizontal)
+        }
+    }
+}
+
+struct ReflectRecentTasksView: View {
+    var allTasks: [Task]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("最近達成したタスク一覧")
+                .font(.headline)
+                .padding(.horizontal)
+
+            let recentTasks = allTasks.filter { $0.status == .done && $0.isRest == false }.sorted { ($0.completedDate ?? Date.distantPast) > ($1.completedDate ?? Date.distantPast) }.prefix(10)
+
+            if recentTasks.isEmpty {
+                Text("まだ達成したタスクはありません")
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal)
+            } else {
+                ForEach(Array(recentTasks)) { task in
+                    HStack {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                        VStack(alignment: .leading) {
+                            Text(task.title)
+                                .font(.subheadline)
+                            if let date = task.completedDate {
+                                Text(date.formatted())
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        Spacer()
+                    }
+                    .padding(.horizontal)
+                    .padding(.vertical, 4)
+                }
+            }
+        }
+    }
+}
 }
 
 #Preview {

@@ -49,99 +49,16 @@ struct FocusView: View {
                     selectedTask = incompleteTasks.first
                 }
 
-                HStack {
-                    if focusMode == .focus {
-                        Picker("タブ", selection: $selectedCategoryForFocus) {
-                            Text("未分類").tag(TaskCategory?.none)
-                            ForEach(categories) { category in
-                                Text(category.name).tag(TaskCategory?.some(category))
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .disabled(timerManager.isRunning)
-                        .padding(8)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(selectedCategoryForFocus?.themeColorHex != nil ? Color(hex: selectedCategoryForFocus!.themeColorHex!)! : Color.gray, lineWidth: 2)
-                        )
-                        .background(selectedCategoryForFocus?.themeColorHex != nil ? Color(hex: selectedCategoryForFocus!.themeColorHex!)!.opacity(0.1) : Color.clear)
-                        .onChange(of: selectedCategoryForFocus) { _, _ in
-                            selectedTask = incompleteTasks.first
-                        }
-                    }
-
-                    if !incompleteTasks.isEmpty {
-                        Menu {
-                            Picker("Task", selection: $selectedTask) {
-                                ForEach(incompleteTasks) { task in
-                                    Text(task.title).tag(Task?.some(task))
-                                }
-                            }
-
-                            Button(action: {
-                                newInlineTaskTitle = ""
-                                showingInlineTaskAlert = true
-                            }) {
-                                Label("新規タスク", systemImage: "plus")
-                            }
-                        } label: {
-                            HStack {
-                                Text(selectedTask?.title ?? "Select a task")
-                                    .lineLimit(1)
-                                Image(systemName: "chevron.up.chevron.down")
-                                    .font(.caption)
-                            }
-                        }
-                        .disabled(timerManager.isRunning)
-                        .padding(8)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(selectedCategoryForFocus?.themeColorHex != nil ? Color(hex: selectedCategoryForFocus!.themeColorHex!)! : Color.gray, lineWidth: 2)
-                        )
-                        .background(selectedCategoryForFocus?.themeColorHex != nil ? Color(hex: selectedCategoryForFocus!.themeColorHex!)!.opacity(0.1) : Color.clear)
-                    } else {
-                        Text("No tasks available")
-                            .foregroundColor(.secondary)
-
-                        Button(action: {
-                            newInlineTaskTitle = ""
-                            showingInlineTaskAlert = true
-                        }) {
-                            Image(systemName: "plus")
-                                .padding(8)
-                                .background(Color.gray.opacity(0.2))
-                                .cornerRadius(8)
-                        }
-                    }
-
-                    Spacer()
-
-                    if let task = selectedTask {
-                        VStack(alignment: .trailing, spacing: 2) {
-                            let elapsedSeconds = task.pomodoroSessions?.reduce(0) { $0 + $1.duration } ?? 0
-                            let totalEstimatedSeconds = Double(task.estimatedSessions * timerManager.defaultDurationMinutes * 60)
-                            let remainingSeconds = totalEstimatedSeconds - elapsedSeconds
-
-                            let elapsedHours = Int(elapsedSeconds) / 3600
-                            let elapsedMins = (Int(elapsedSeconds) % 3600) / 60
-                            let elapsedText = elapsedHours > 0 ? "\(elapsedHours)h \(elapsedMins)m" : "\(elapsedMins)m"
-
-                            let remAbs = Int(abs(remainingSeconds))
-                            let remHours = remAbs / 3600
-                            let remMins = (remAbs % 3600) / 60
-                            let remPrefix = remainingSeconds < 0 ? "-" : ""
-                            let remText = remHours > 0 ? "\(remPrefix)\(remHours)h \(remMins)m" : "\(remPrefix)\(remMins)m"
-
-                            Text("Elapsed: \(elapsedText)")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                            Text("Remaining: \(remText)")
-                                .font(.caption2)
-                                .foregroundColor(remainingSeconds < 0 ? .red : .secondary)
-                        }
-                    }
-                }
-                .padding(.horizontal)
+                FocusHeaderView(
+                    focusMode: focusMode,
+                    categories: categories,
+                    incompleteTasks: incompleteTasks,
+                    selectedCategoryForFocus: $selectedCategoryForFocus,
+                    selectedTask: $selectedTask,
+                    newInlineTaskTitle: $newInlineTaskTitle,
+                    showingInlineTaskAlert: $showingInlineTaskAlert,
+                    timerManager: timerManager
+                )
 
                 Spacer()
 
@@ -298,6 +215,113 @@ struct FocusView: View {
         timerManager.showingMoodSheet = false
         timerManager.resetTimer()
     }
+
+struct FocusHeaderView: View {
+    let focusMode: FocusMode
+    let categories: [TaskCategory]
+    let incompleteTasks: [Task]
+    @Binding var selectedCategoryForFocus: TaskCategory?
+    @Binding var selectedTask: Task?
+    @Binding var newInlineTaskTitle: String
+    @Binding var showingInlineTaskAlert: Bool
+    let timerManager: TimerManager
+
+    var body: some View {
+        HStack {
+            if focusMode == .focus {
+                Picker("タブ", selection: $selectedCategoryForFocus) {
+                    Text("未分類").tag(TaskCategory?.none)
+                    ForEach(categories) { category in
+                        Text(category.name).tag(TaskCategory?.some(category))
+                    }
+                }
+                .pickerStyle(.menu)
+                .disabled(timerManager.isRunning)
+                .padding(8)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(selectedCategoryForFocus?.themeColorHex != nil ? Color(hex: selectedCategoryForFocus!.themeColorHex!)! : Color.gray, lineWidth: 2)
+                )
+                .background(selectedCategoryForFocus?.themeColorHex != nil ? Color(hex: selectedCategoryForFocus!.themeColorHex!)!.opacity(0.1) : Color.clear)
+                .onChange(of: selectedCategoryForFocus) { _, _ in
+                    selectedTask = incompleteTasks.first
+                }
+            }
+
+            if !incompleteTasks.isEmpty {
+                Menu {
+                    Picker("Task", selection: $selectedTask) {
+                        ForEach(incompleteTasks) { task in
+                            Text(task.title).tag(Task?.some(task))
+                        }
+                    }
+
+                    Button(action: {
+                        newInlineTaskTitle = ""
+                        showingInlineTaskAlert = true
+                    }) {
+                        Label("新規タスク", systemImage: "plus")
+                    }
+                } label: {
+                    HStack {
+                        Text(selectedTask?.title ?? "Select a task")
+                            .lineLimit(1)
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.caption)
+                    }
+                }
+                .disabled(timerManager.isRunning)
+                .padding(8)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(selectedCategoryForFocus?.themeColorHex != nil ? Color(hex: selectedCategoryForFocus!.themeColorHex!)! : Color.gray, lineWidth: 2)
+                )
+                .background(selectedCategoryForFocus?.themeColorHex != nil ? Color(hex: selectedCategoryForFocus!.themeColorHex!)!.opacity(0.1) : Color.clear)
+            } else {
+                Text("No tasks available")
+                    .foregroundColor(.secondary)
+
+                Button(action: {
+                    newInlineTaskTitle = ""
+                    showingInlineTaskAlert = true
+                }) {
+                    Image(systemName: "plus")
+                        .padding(8)
+                        .background(Color.gray.opacity(0.2))
+                        .cornerRadius(8)
+                }
+            }
+
+            Spacer()
+
+            if let task = selectedTask {
+                VStack(alignment: .trailing, spacing: 2) {
+                    let elapsedSeconds = task.pomodoroSessions?.reduce(0) { $0 + $1.duration } ?? 0
+                    let totalEstimatedSeconds = Double(task.estimatedSessions * timerManager.defaultDurationMinutes * 60)
+                    let remainingSeconds = totalEstimatedSeconds - elapsedSeconds
+
+                    let elapsedHours = Int(elapsedSeconds) / 3600
+                    let elapsedMins = (Int(elapsedSeconds) % 3600) / 60
+                    let elapsedText = elapsedHours > 0 ? "\(elapsedHours)h \(elapsedMins)m" : "\(elapsedMins)m"
+
+                    let remAbs = Int(abs(remainingSeconds))
+                    let remHours = remAbs / 3600
+                    let remMins = (remAbs % 3600) / 60
+                    let remPrefix = remainingSeconds < 0 ? "-" : ""
+                    let remText = remHours > 0 ? "\(remPrefix)\(remHours)h \(remMins)m" : "\(remPrefix)\(remMins)m"
+
+                    Text("Elapsed: \(elapsedText)")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    Text("Remaining: \(remText)")
+                        .font(.caption2)
+                        .foregroundColor(remainingSeconds < 0 ? .red : .secondary)
+                }
+            }
+        }
+        .padding(.horizontal)
+    }
+}
 }
 
 #Preview {
