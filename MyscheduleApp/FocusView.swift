@@ -65,7 +65,7 @@ struct FocusView: View {
 
                 FocusTimerView(
                     timerManager: timerManager,
-                    bindableTimerManager: $bindableTimerManager,
+                    bindableTimerManager: timerManager,
                     focusMode: focusMode
                 )
 
@@ -270,7 +270,7 @@ struct FocusHeaderView: View {
 
 struct FocusTimerView: View {
     let timerManager: TimerManager
-    @Binding var bindableTimerManager: TimerManager
+    @Bindable var bindableTimerManager: TimerManager
     let focusMode: FocusMode
 
     var body: some View {
