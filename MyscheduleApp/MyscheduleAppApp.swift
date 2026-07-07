@@ -17,7 +17,14 @@ struct MyscheduleAppApp: App {
 
     init() {
         let schema = Schema([TaskCategory.self, Task.self, PomodoroSession.self, Tag.self])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false, groupContainer: .identifier("group.com.myscheduleapp"))
+
+        let modelConfiguration: ModelConfiguration
+        if FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.myscheduleapp") != nil {
+            modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false, groupContainer: .identifier("group.com.myscheduleapp"))
+        } else {
+            // Fallback for when AppGroup entitlement is not yet configured in Xcode
+            modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+        }
 
         do {
             sharedModelContainer = try ModelContainer(for: schema, configurations: [modelConfiguration])
