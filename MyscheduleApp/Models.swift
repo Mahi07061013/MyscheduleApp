@@ -50,8 +50,9 @@ final class Task {
     @Attribute(.unique) var id: UUID
     var title: String
     var status: TaskStatus
-    var startDate: Date?
-    var priority: TaskPriority?
+    var startDate: Date
+    var priority: TaskPriority
+    var estimatedSessions: Int = 1
     var textColorHex: String?
 
     @Relationship(deleteRule: .cascade, inverse: \PomodoroSession.task)
@@ -70,12 +71,13 @@ final class Task {
     var orderIndex: Int = 0
     var completedDate: Date?
 
-    init(id: UUID = UUID(), title: String, status: TaskStatus = .todo, startDate: Date? = nil, priority: TaskPriority? = nil, textColorHex: String? = nil, category: TaskCategory? = nil, tags: [Tag]? = nil, subtasks: [Task]? = nil, parentTask: Task? = nil, isRest: Bool = false, orderIndex: Int = 0, completedDate: Date? = nil) {
+    init(id: UUID = UUID(), title: String, status: TaskStatus = .todo, startDate: Date = Date(), priority: TaskPriority = .low, estimatedSessions: Int = 1, textColorHex: String? = nil, category: TaskCategory? = nil, tags: [Tag]? = nil, subtasks: [Task]? = nil, parentTask: Task? = nil, isRest: Bool = false, orderIndex: Int = 0, completedDate: Date? = nil) {
         self.id = id
         self.title = title
         self.status = status
         self.startDate = startDate
         self.priority = priority
+        self.estimatedSessions = estimatedSessions
         self.textColorHex = textColorHex
         self.category = category
         self.tags = tags
@@ -93,11 +95,13 @@ final class PomodoroSession {
     var date: Date
     var duration: TimeInterval
     var task: Task?
+    var moodRating: Int?
 
-    init(id: UUID = UUID(), date: Date = Date(), duration: TimeInterval = 1500, task: Task? = nil) {
+    init(id: UUID = UUID(), date: Date = Date(), duration: TimeInterval = 1500, task: Task? = nil, moodRating: Int? = nil) {
         self.id = id
         self.date = date
         self.duration = duration
         self.task = task
+        self.moodRating = moodRating
     }
 }

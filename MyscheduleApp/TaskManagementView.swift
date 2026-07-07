@@ -27,6 +27,8 @@ struct TaskManagementView: View {
     @State private var isShowingAddTaskSheet = false
     @State private var isShowingAddCategorySheet = false
     @State private var selectedTaskForDetail: Task?
+    @State private var categoryToEdit: TaskCategory?
+    @State private var isShowingEditCategorySheet = false
 
     private var listBackgroundColor: Color {
         if viewMode == .rest {
@@ -36,6 +38,18 @@ struct TaskManagementView: View {
             return color.opacity(0.15)
         }
         return Color.clear
+    }
+
+
+    private var filteredTasksForList: [Task] {
+        tasks.filter { task in
+            if task.parentTask != nil { return false }
+            if viewMode == .rest {
+                return task.isRest == true
+            } else {
+                return task.isRest == false && task.category?.id == selectedCategory?.id
+            }
+        }.sorted(by: { $0.orderIndex < $1.orderIndex })
     }
 
     var body: some View {
@@ -50,70 +64,39 @@ struct TaskManagementView: View {
                 .padding()
 
                 if viewMode == .tasks {
-                    // Categories Tab UI
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 12) {
-                            // Default Uncategorized Tab
-                            Button(action: {
-                                withAnimation {
-                                    selectedCategory = nil
-                                }
-                            }) {
-                                Text("未分類")
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 8)
-                                    .background(selectedCategory == nil ? Color.blue : Color.gray.opacity(0.2))
-                                    .foregroundColor(selectedCategory == nil ? .white : .primary)
-                                    .cornerRadius(16)
-                            }
-
-                            ForEach(categories) { category in
-                                CategoryTabItemView(
-                                    category: category,
-                                    selectedCategory: selectedCategory,
-                                    onTap: {
-                                        withAnimation {
-                                            selectedCategory = category
-                                        }
-                                    },
-                                    onDelete: {
-                                        categoryToDelete = category
-                                    }
-                                )
-                                .onDrag {
-                                    NSItemProvider(object: category.id.uuidString as NSString)
-                                }
-                                .onDrop(of: [UTType.text], delegate: CategoryDropDelegate(item: category, categories: categories, onReorder: reorderCategories))
-                            }
-
-                            Button(action: {
-                                isShowingAddCategorySheet = true
-                            }) {
-                                Image(systemName: "plus")
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 8)
-                                    .background(Color.gray.opacity(0.2))
-                                    .cornerRadius(16)
-                            }
-                        }
-                        .padding()
-                    }
+                    CategoriesTabView(
+                        categories: categories,
+                        selectedCategory: $selectedCategory,
+                        categoryToDelete: $categoryToDelete,
+                        categoryToEdit: $categoryToEdit,
+                        isShowingAddCategorySheet: $isShowingAddCategorySheet,
+                        isShowingEditCategorySheet: $isShowingEditCategorySheet,
+                        onReorder: reorderCategories
+                    )
                 }
 
                 List {
-                    ForEach(tasks.filter { task in
-                        if viewMode == .rest {
-                            return task.isRest
-                        } else {
-                            return !task.isRest && task.category?.id == selectedCategory?.id
+                    ForEach(filteredTasksForList) { task in
+                        VStack(alignment: .leading, spacing: 0) {
+                            Button(action: {
+                                selectedTaskForDetail = task
+                            }) {
+                                TaskRowView(task: task)
+                            }
+                            .buttonStyle(.plain)
+
+                            if let subtasks = task.subtasks {
+                                ForEach(subtasks.sorted(by: { $0.orderIndex < $1.orderIndex })) { subtask in
+                                    Button(action: {
+                                        selectedTaskForDetail = subtask
+                                    }) {
+                                        TaskRowView(task: subtask)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .padding(.leading, 32)
+                                }
+                            }
                         }
-                    }.sorted(by: { $0.orderIndex < $1.orderIndex })) { task in
-                        Button(action: {
-                            selectedTaskForDetail = task
-                        }) {
-                            TaskRowView(task: task)
-                        }
-                        .buttonStyle(.plain)
                     }
                     .onDelete(perform: deleteTasks)
                     .onMove(perform: moveTasks)
@@ -129,6 +112,12 @@ struct TaskManagementView: View {
                     }) {
                         Image(systemName: "plus")
                     }
+                }
+            }
+
+            .sheet(isPresented: $isShowingEditCategorySheet) {
+                if let categoryToEdit = categoryToEdit {
+                    EditCategorySheet(category: categoryToEdit)
                 }
             }
             .sheet(isPresented: $isShowingAddCategorySheet) {
@@ -169,10 +158,11 @@ struct TaskManagementView: View {
 
     private func moveTasks(from source: IndexSet, to destination: Int) {
         var filteredTasks = tasks.filter { task in
+            if task.parentTask != nil { return false }
             if viewMode == .rest {
-                return task.isRest
+                return task.isRest == true
             } else {
-                return !task.isRest && task.category?.id == selectedCategory?.id
+                return task.isRest == false && task.category?.id == selectedCategory?.id
             }
         }.sorted(by: { $0.orderIndex < $1.orderIndex })
 
@@ -206,10 +196,11 @@ struct TaskManagementView: View {
 
     private func deleteTasks(offsets: IndexSet) {
         let filteredTasks = tasks.filter { task in
+            if task.parentTask != nil { return false }
             if viewMode == .rest {
-                return task.isRest
+                return task.isRest == true
             } else {
-                return !task.isRest && task.category?.id == selectedCategory?.id
+                return task.isRest == false && task.category?.id == selectedCategory?.id
             }
         }.sorted(by: { $0.orderIndex < $1.orderIndex })
         withAnimation {
@@ -225,6 +216,7 @@ struct CategoryTabItemView: View {
     let selectedCategory: TaskCategory?
     let onTap: () -> Void
     let onDelete: () -> Void
+    let onEdit: () -> Void
 
     var body: some View {
         HStack(spacing: 6) {
@@ -247,6 +239,9 @@ struct CategoryTabItemView: View {
         .cornerRadius(16)
         .onTapGesture(perform: onTap)
         .contextMenu {
+            Button(action: onEdit) {
+                Label("名前 / 色を変更", systemImage: "pencil")
+            }
             Button(role: .destructive, action: onDelete) {
                 Label("削除", systemImage: "trash")
             }
@@ -342,6 +337,7 @@ struct AddTaskView: View {
     @State private var isCreatingNewCategory = false
     @State private var title: String = ""
     @State private var status: TaskStatus = .todo
+    @State private var estimatedSessions: Int = 1
     @State private var hasStartDate = false
     @State private var startDate = Date()
     @State private var hasPriority = false
@@ -364,6 +360,10 @@ struct AddTaskView: View {
                         ForEach(TaskStatus.allCases, id: \.self) { status in
                             Text(status.rawValue).tag(status)
                         }
+                    }
+
+                    Stepper(value: $estimatedSessions, in: 1...100) {
+                        Text("予想ポモドーロ数: \(estimatedSessions)")
                     }
 
                     if showCategoryCreation && !initialIsRest {
@@ -490,8 +490,9 @@ struct AddTaskView: View {
         let newTask = Task(
             title: title.trimmingCharacters(in: .whitespacesAndNewlines),
             status: status,
-            startDate: hasStartDate ? startDate : nil,
-            priority: hasPriority ? priority : nil,
+            startDate: hasStartDate ? startDate : Date.distantPast,
+            priority: hasPriority ? priority : .low,
+            estimatedSessions: estimatedSessions,
             category: finalCategory,
             tags: Array(selectedTags),
             isRest: initialIsRest
@@ -541,13 +542,15 @@ struct TaskRowView: View {
                     .foregroundColor(textColor)
                     .font(.headline)
 
-                if task.startDate != nil || task.priority != nil {
+                if task.startDate != Date.distantPast || task.priority != .low {
                     HStack(spacing: 8) {
-                        if let startDate = task.startDate {
+                        let startDate = task.startDate
+                        if startDate != Date.distantPast {
                             Label(startDate.formatted(date: .abbreviated, time: .shortened), systemImage: "calendar")
                         }
 
-                        if let priority = task.priority {
+                        let priority = task.priority
+                        if priority != .low {
                             Label(priority.rawValue, systemImage: "exclamationmark.circle")
                                 .foregroundColor(priorityColor(priority))
                         }
@@ -649,5 +652,144 @@ struct CategoryDropDelegate: DropDelegate {
 
     func dropUpdated(info: DropInfo) -> DropProposal? {
         return DropProposal(operation: .move)
+    }
+}
+
+struct TaskListRowView: View {
+    @Bindable var task: Task
+    @Binding var selectedTaskForDetail: Task?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button(action: {
+                selectedTaskForDetail = task
+            }) {
+                TaskRowView(task: task)
+            }
+            .buttonStyle(.plain)
+
+            if let subtasks = task.subtasks {
+                ForEach(subtasks.sorted(by: { $0.orderIndex < $1.orderIndex })) { subtask in
+                    Button(action: {
+                        selectedTaskForDetail = subtask
+                    }) {
+                        TaskRowView(task: subtask)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.leading, 20)
+                }
+            }
+        }
+    }
+}
+
+struct CategoriesTabView: View {
+    var categories: [TaskCategory]
+    @Binding var selectedCategory: TaskCategory?
+    @Binding var categoryToDelete: TaskCategory?
+    @Binding var categoryToEdit: TaskCategory?
+    @Binding var isShowingAddCategorySheet: Bool
+    @Binding var isShowingEditCategorySheet: Bool
+    var onReorder: (TaskCategory, TaskCategory) -> Void
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                Button(action: {
+                    withAnimation {
+                        selectedCategory = nil
+                    }
+                }) {
+                    Text("未分類")
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(selectedCategory == nil ? Color.blue : Color.gray.opacity(0.2))
+                        .foregroundColor(selectedCategory == nil ? .white : .primary)
+                        .cornerRadius(16)
+                }
+
+                ForEach(categories) { category in
+                    CategoryTabItemView(
+                        category: category,
+                        selectedCategory: selectedCategory,
+                        onTap: {
+                            withAnimation {
+                                selectedCategory = category
+                            }
+                        },
+                        onDelete: {
+                            categoryToDelete = category
+                        },
+                        onEdit: {
+                            categoryToEdit = category
+                            isShowingEditCategorySheet = true
+                        }
+                    )
+                    .onDrag {
+                        NSItemProvider(object: category.id.uuidString as NSString)
+                    }
+                    .onDrop(of: [UTType.text], delegate: CategoryDropDelegate(item: category, categories: categories, onReorder: onReorder))
+                }
+
+                Button(action: {
+                    isShowingAddCategorySheet = true
+                }) {
+                    Image(systemName: "plus")
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(Color.gray.opacity(0.2))
+                        .cornerRadius(16)
+                }
+            }
+            .padding()
+        }
+    }
+}
+
+struct TaskBottomButtonsView: View {
+    @Binding var isShowingAddTaskSheet: Bool
+    var onDeleteCompleted: () -> Void
+
+    var body: some View {
+        HStack {
+            Button(action: {
+                isShowingAddTaskSheet = true
+            }) {
+                Text("タスクを追加")
+                    .font(.headline)
+                    .padding()
+                    .frame(maxWidth: .infinity)
+                    .background(Color.blue)
+                    .foregroundColor(.white)
+                    .cornerRadius(10)
+            }
+
+            Button(action: onDeleteCompleted) {
+                Image(systemName: "trash")
+                    .font(.headline)
+                    .padding()
+                    .background(Color.red.opacity(0.1))
+                    .foregroundColor(.red)
+                    .cornerRadius(10)
+            }
+        }
+        .padding()
+    }
+}
+
+struct TaskListView: View {
+    var filteredTasksForList: [Task]
+    @Binding var selectedTaskForDetail: Task?
+    var onDelete: (IndexSet) -> Void
+    var onMove: (IndexSet, Int) -> Void
+
+    var body: some View {
+        List {
+            ForEach(filteredTasksForList) { task in
+                TaskListRowView(task: task, selectedTaskForDetail: $selectedTaskForDetail)
+            }
+            .onDelete(perform: onDelete)
+            .onMove(perform: onMove)
+        }
     }
 }
