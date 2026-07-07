@@ -3,13 +3,15 @@ import Charts
 import SwiftData
 
 enum DisplayMode: String, CaseIterable {
-    case count = "達成回数"
+    case count = "取り組んだ回数"
     case duration = "取り組んだ時間"
 }
 
 struct ReflectView: View {
     @Query var sessions: [PomodoroSession]
+    @Query var allTasks: [Task]
     @State private var displayMode: DisplayMode = .count
+    @State private var showingAllCategories = false
 
     // MARK: - Helpers
 
@@ -19,6 +21,10 @@ struct ReflectView: View {
 
     private var filteredSessions: [PomodoroSession] {
         sessions.filter { $0.task?.isRest != true }
+    }
+
+    private var completedTasks: [Task] {
+        allTasks.filter { $0.status == .done && !$0.isRest }
     }
 
     private var sessionsByDate: [Date: [PomodoroSession]] {
@@ -68,8 +74,8 @@ struct ReflectView: View {
             }
         }
 
-        return grouped.map { CategoryData(name: $0.key, colorHex: $0.value.colorHex, value: $0.value.value) }
-            .sorted { $0.value > $1.value }
+        let result = grouped.map { CategoryData(name: $0.key, colorHex: $0.value.colorHex, value: $0.value.value) }
+        return result.sorted { $0.value > $1.value }
     }
 
     private var totalCategoryValue: Double {
@@ -105,14 +111,6 @@ struct ReflectView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
-                    Picker("表示モード", selection: $displayMode) {
-                        ForEach(DisplayMode.allCases, id: \.self) { mode in
-                            Text(mode.rawValue).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .padding(.horizontal)
-
                     VStack(alignment: .leading, spacing: 8) {
                         Text("カレンダー")
                             .font(.headline)
@@ -127,14 +125,36 @@ struct ReflectView: View {
                                     .fill(hasSessions ? Color.green.opacity(0.8) : Color.gray.opacity(0.2))
                                     .frame(height: 40)
                                     .overlay {
-                                        Text("\(calendar.component(.day, from: date))")
-                                            .font(.caption2)
-                                            .foregroundColor(isCurrentMonth ? .primary : .secondary)
+                                        ZStack {
+                                            Text("\(calendar.component(.day, from: date))")
+                                                .font(.caption2)
+                                                .foregroundColor(isCurrentMonth ? .primary : .secondary)
+
+                                            if completedTasks.contains(where: {
+                                                if let completedDate = $0.completedDate {
+                                                    return calendar.isDate(completedDate, inSameDayAs: date)
+                                                }
+                                                return false
+                                            }) {
+                                                Image(systemName: "star.fill")
+                                                    .foregroundColor(.yellow)
+                                                    .font(.system(size: 10))
+                                                    .offset(x: 10, y: -10)
+                                            }
+                                        }
                                     }
                             }
                         }
                         .padding(.horizontal)
                     }
+
+                    Picker("表示モード", selection: $displayMode) {
+                        ForEach(DisplayMode.allCases, id: \.self) { mode in
+                            Text(mode.rawValue).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal)
 
                     VStack(alignment: .leading, spacing: 8) {
                         Text("直近7日間の実績")
@@ -151,7 +171,7 @@ struct ReflectView: View {
                             }
                         }
                         .chartXAxis {
-                            AxisMarks(values: .stride(by: .day)) { value in
+                            AxisMarks(values: .stride(by: .day, count: 10)) { value in
                                 AxisGridLine()
                                 AxisValueLabel(format: .dateTime.month().day())
                             }
@@ -203,11 +223,101 @@ struct ReflectView: View {
                                 }
                             }
                         }
+
+                        VStack(alignment: .leading, spacing: 12) {
+                            ForEach(Array(categoryData.prefix(5))) { data in
+                                HStack {
+                                    Circle()
+                                        .fill(Color(hex: data.colorHex ?? "") ?? .gray)
+                                        .frame(width: 12, height: 12)
+                                    Text(data.name)
+                                    Spacer()
+                                    if displayMode == .count {
+                                        Text("\(Int(data.value))回")
+                                    } else {
+                                        let hours = Int(data.value) / 60
+                                        let mins = Int(data.value) % 60
+                                        Text(hours > 0 ? "\(hours)h \(mins)m" : "\(mins)m")
+                                    }
+                                }
+                            }
+                            if categoryData.count > 5 {
+                                Button("詳細を表示") {
+                                    showingAllCategories = true
+                                }
+                                .padding(.top, 8)
+                            }
+                        }
+                        .padding(.horizontal)
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("最近達成したタスク")
+                            .font(.headline)
+                            .padding(.horizontal)
+
+                        let recentCompleted = completedTasks.sorted {
+                            ($0.completedDate ?? .distantPast) > ($1.completedDate ?? .distantPast)
+                        }.prefix(5)
+
+                        if recentCompleted.isEmpty {
+                            Text("達成したタスクはありません")
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal)
+                        } else {
+                            ForEach(Array(recentCompleted)) { task in
+                                HStack {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundColor(.green)
+                                    VStack(alignment: .leading) {
+                                        Text(task.title)
+                                            .font(.subheadline)
+                                        if let date = task.completedDate {
+                                            Text(date.formatted(date: .numeric, time: .shortened))
+                                                .font(.caption2)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                    Spacer()
+                                }
+                                .padding(.horizontal)
+                                .padding(.vertical, 4)
+                            }
+                        }
                     }
                 }
                 .padding(.vertical)
             }
             .navigationTitle("振り返り")
+            .sheet(isPresented: $showingAllCategories) {
+                NavigationStack {
+                    List(categoryData) { data in
+                        HStack {
+                            Circle()
+                                .fill(Color(hex: data.colorHex ?? "") ?? .gray)
+                                .frame(width: 12, height: 12)
+                            Text(data.name)
+                            Spacer()
+                            if displayMode == .count {
+                                Text("\(Int(data.value))回")
+                            } else {
+                                let hours = Int(data.value) / 60
+                                let mins = Int(data.value) % 60
+                                Text(hours > 0 ? "\(hours)h \(mins)m" : "\(mins)m")
+                            }
+                        }
+                    }
+                    .navigationTitle("カテゴリ別ランキング")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("閉じる") {
+                                showingAllCategories = false
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
