@@ -490,8 +490,8 @@ struct AddTaskView: View {
         let newTask = Task(
             title: title.trimmingCharacters(in: .whitespacesAndNewlines),
             status: status,
-            startDate: hasStartDate ? startDate : nil,
-            priority: hasPriority ? priority : nil,
+            startDate: hasStartDate ? startDate : Date(),
+            priority: hasPriority ? priority : .low,
             category: finalCategory,
             tags: Array(selectedTags),
             isRest: initialIsRest
@@ -532,8 +532,6 @@ struct TaskRowView: View {
                     .font(.title2)
             }
             .buttonStyle(.plain)
-            // Tap gesture is disabled here so it doesn't propagate to the row's Button action if we just want to toggle status. Wait, if Button is around TaskRowView, it intercepts taps.
-            // By keeping the button here, SwiftUI might handle it correctly.
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(task.title)
@@ -541,20 +539,14 @@ struct TaskRowView: View {
                     .foregroundColor(textColor)
                     .font(.headline)
 
-                if task.startDate != nil || task.priority != nil {
-                    HStack(spacing: 8) {
-                        if let startDate = task.startDate {
-                            Label(startDate.formatted(date: .abbreviated, time: .shortened), systemImage: "calendar")
-                        }
+                HStack(spacing: 8) {
+                    Label(task.startDate.formatted(date: .abbreviated, time: .shortened), systemImage: "calendar")
 
-                        if let priority = task.priority {
-                            Label(priority.rawValue, systemImage: "exclamationmark.circle")
-                                .foregroundColor(priorityColor(priority))
-                        }
-                    }
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                    Label(task.priority.rawValue, systemImage: "exclamationmark.circle")
+                        .foregroundColor(priorityColor(task.priority))
                 }
+                .font(.caption)
+                .foregroundColor(.secondary)
             }
         }
         .padding(.vertical, 4)

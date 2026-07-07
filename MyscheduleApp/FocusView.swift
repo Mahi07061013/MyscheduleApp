@@ -9,7 +9,7 @@ enum FocusMode: String, CaseIterable {
 
 struct FocusView: View {
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.scenePhase) var scenePhase
+    @Environment(TimerManager.self) private var timerManager
     @Query private var allTasks: [Task]
 
     @State private var focusMode: FocusMode = .focus
@@ -30,28 +30,16 @@ struct FocusView: View {
         }
     }
 
-    // Timer state
-    @AppStorage("defaultDurationMinutes") private var defaultDurationMinutes: Int = 25
-    @State private var timeRemaining: TimeInterval = 1500
-    @State private var isRunning = false
-    @State private var timer: Timer?
-    @State private var showingFinishedAlert = false
     @State private var showingStopAlert = false
 
-    @State private var backgroundDate: Date?
-
-    var defaultDuration: TimeInterval {
-        TimeInterval(defaultDurationMinutes * 60)
+    var progress: Double {
+        return timerManager.progress
     }
 
     var timeString: String {
-        let minutes = Int(timeRemaining) / 60
-        let seconds = Int(timeRemaining) % 60
+        let minutes = Int(timerManager.timeRemaining) / 60
+        let seconds = Int(timerManager.timeRemaining) % 60
         return String(format: "%02d:%02d", minutes, seconds)
-    }
-
-    var progress: Double {
-        return 1.0 - (timeRemaining / defaultDuration)
     }
 
     var body: some View {
@@ -128,7 +116,7 @@ struct FocusView: View {
                         .animation(.linear, value: progress)
 
                     Menu {
-                        Picker("時間", selection: $defaultDurationMinutes) {
+                        Picker("時間", selection: Bindable(timerManager).defaultDurationMinutes) {
                             ForEach(Array(stride(from: 5, through: 60, by: 5)), id: \.self) { minutes in
                                 Text("\(minutes)分").tag(minutes)
                             }
@@ -138,12 +126,12 @@ struct FocusView: View {
                             .font(.system(size: 60, weight: .bold, design: .monospaced))
                             .foregroundColor(.primary)
                     }
-                    .disabled(isRunning)
-                    .onChange(of: defaultDurationMinutes) { _, _ in
-                        if !isRunning && timeRemaining == defaultDuration {
-                            timeRemaining = defaultDuration
-                        } else if !isRunning {
-                             timeRemaining = defaultDuration
+                    .disabled(timerManager.isRunning)
+                    .onChange(of: timerManager.defaultDurationMinutes) { _, _ in
+                        if !timerManager.isRunning && timerManager.timeRemaining == timerManager.defaultDuration {
+                            timerManager.timeRemaining = timerManager.defaultDuration
+                        } else if !timerManager.isRunning {
+                             timerManager.timeRemaining = timerManager.defaultDuration
                         }
                     }
                 }
@@ -157,17 +145,17 @@ struct FocusView: View {
 
                 HStack(spacing: 30) {
                     Button(action: {
-                        if isRunning {
-                            pauseTimer()
+                        if timerManager.isRunning {
+                            timerManager.pauseTimer()
                         } else {
-                            startTimer()
+                            timerManager.startTimer()
                         }
                     }) {
-                        Text(isRunning ? "Pause" : "Start")
+                        Text(timerManager.isRunning ? "Pause" : "Start")
                             .font(.title2)
                             .padding()
                             .frame(width: 120)
-                            .background(isRunning ? Color.yellow : (selectedTask == nil ? Color.gray : Color.blue))
+                            .background(timerManager.isRunning ? Color.yellow : (selectedTask == nil ? Color.gray : Color.blue))
                             .foregroundColor(.white)
                             .cornerRadius(10)
                     }
@@ -184,55 +172,42 @@ struct FocusView: View {
                             .foregroundColor(.white)
                             .cornerRadius(10)
                     }
-                    .disabled(!isRunning && timeRemaining == defaultDuration)
+                    .disabled(!timerManager.isRunning && timerManager.timeRemaining == timerManager.defaultDuration)
                 }
                 .padding(.bottom, 50)
 
                 Spacer()
             }
             .onAppear {
-                requestNotificationAuthorization()
+                timerManager.requestNotificationAuthorization()
                 if selectedTask == nil {
                     selectedTask = incompleteTasks.first
                 }
-                if !isRunning && timeRemaining == 1500 && defaultDurationMinutes != 25 {
-                    timeRemaining = defaultDuration
-                } else if !isRunning && timeRemaining != defaultDuration {
+                if !timerManager.isRunning && timerManager.timeRemaining == 1500 && timerManager.defaultDurationMinutes != 25 {
+                    timerManager.timeRemaining = timerManager.defaultDuration
+                } else if !timerManager.isRunning && timerManager.timeRemaining != timerManager.defaultDuration {
                     // keep it
-                } else if !isRunning {
-                    timeRemaining = defaultDuration
+                } else if !timerManager.isRunning {
+                    timerManager.timeRemaining = timerManager.defaultDuration
                 }
             }
-            .onDisappear {
-                timer?.invalidate()
-            }
-            .onChange(of: scenePhase) { oldPhase, newPhase in
-                if newPhase == .background {
-                    if isRunning {
-                        backgroundDate = Date()
-                    }
-                } else if newPhase == .active {
-                    if let bgDate = backgroundDate, isRunning {
-                        let elapsed = Date().timeIntervalSince(bgDate)
-                        timeRemaining -= elapsed
-                        if timeRemaining <= 0 {
-                            timeRemaining = 0
-                            timerFinished()
-                        }
-                    }
-                    backgroundDate = nil
+            .onChange(of: timerManager.showingFinishedAlert) { _, newValue in
+                if newValue {
+                    let newSession = PomodoroSession(date: Date(), duration: timerManager.defaultDuration, task: selectedTask)
+                    modelContext.insert(newSession)
                 }
             }
-            .alert("お疲れ様でした！", isPresented: $showingFinishedAlert) {
+            .alert("お疲れ様でした！", isPresented: Bindable(timerManager).showingFinishedAlert) {
                 Button("OK", role: .cancel) {
-                    resetTimer()
+                    timerManager.showingFinishedAlert = false
+                    timerManager.resetTimer()
                 }
             } message: {
                 Text("ポモドーロセッションが完了しました。")
             }
             .alert("本当にやめますか？", isPresented: $showingStopAlert) {
                 Button("やめる", role: .destructive) {
-                    stopAndResetTimer()
+                    timerManager.stopAndResetTimer()
                 }
                 Button("キャンセル", role: .cancel) { }
             } message: {
@@ -243,70 +218,10 @@ struct FocusView: View {
             }
         }
     }
-
-    private func requestNotificationAuthorization() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
-    }
-
-    private func scheduleNotification() {
-        cancelNotification()
-
-        let content = UNMutableNotificationContent()
-        content.title = "時間です！"
-        content.body = "タイマーが終了しました。"
-        content.sound = .default
-
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: timeRemaining > 0 ? timeRemaining : 1, repeats: false)
-        let request = UNNotificationRequest(identifier: "timerFinished", content: content, trigger: trigger)
-
-        UNUserNotificationCenter.current().add(request)
-    }
-
-    private func cancelNotification() {
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["timerFinished"])
-    }
-
-    private func startTimer() {
-        isRunning = true
-        scheduleNotification()
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
-            if timeRemaining > 0 {
-                timeRemaining -= 1
-            } else {
-                timerFinished()
-            }
-        }
-    }
-
-    private func pauseTimer() {
-        isRunning = false
-        timer?.invalidate()
-        timer = nil
-        cancelNotification()
-    }
-
-    private func resetTimer() {
-        pauseTimer()
-        timeRemaining = defaultDuration
-    }
-
-    private func stopAndResetTimer() {
-        pauseTimer()
-        timeRemaining = defaultDuration
-    }
-
-    private func timerFinished() {
-        pauseTimer()
-        timeRemaining = 0
-
-        let newSession = PomodoroSession(date: Date(), duration: defaultDuration, task: selectedTask)
-        modelContext.insert(newSession)
-
-        showingFinishedAlert = true
-    }
 }
 
 #Preview {
     FocusView()
         .modelContainer(for: [TaskCategory.self, Task.self, PomodoroSession.self, Tag.self], inMemory: true)
+        .environment(TimerManager())
 }
