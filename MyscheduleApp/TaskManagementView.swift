@@ -24,9 +24,12 @@ struct TaskManagementView: View {
     @State private var isShowingAddCategoryAlert = false
     @State private var newCategoryName = ""
     @State private var categoryToDelete: TaskCategory?
+    @State private var categoryToEdit: TaskCategory?
+    @State private var isShowingEditCategorySheet = false
     @State private var isShowingAddTaskSheet = false
     @State private var isShowingAddCategorySheet = false
     @State private var selectedTaskForDetail: Task?
+    @State private var draggedCategory: TaskCategory?
 
     private var listBackgroundColor: Color {
         if viewMode == .rest {
@@ -78,12 +81,17 @@ struct TaskManagementView: View {
                                     },
                                     onDelete: {
                                         categoryToDelete = category
+                                    },
+                                    onEdit: {
+                                        categoryToEdit = category
+                                        isShowingEditCategorySheet = true
                                     }
                                 )
                                 .onDrag {
-                                    NSItemProvider(object: category.id.uuidString as NSString)
+                                    draggedCategory = category
+                                    return NSItemProvider(object: category.id.uuidString as NSString)
                                 }
-                                .onDrop(of: [UTType.text], delegate: CategoryDropDelegate(item: category, categories: categories, onReorder: reorderCategories))
+                                .onDrop(of: [UTType.text], delegate: CategoryDropDelegate(item: category, categories: categories, draggedItem: $draggedCategory, onReorder: reorderCategories))
                             }
 
                             Button(action: {
@@ -120,8 +128,33 @@ struct TaskManagementView: View {
                 }
                 .scrollContentBackground(.hidden)
                 .background(listBackgroundColor)
+
+                // Bottom Action Buttons
+                HStack {
+                    Button(action: {
+                        isShowingAddTaskSheet = true
+                    }) {
+                        Text("タスクを追加")
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.blue)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                    }
+
+                    Button(action: {
+                        deleteCompletedTasks()
+                    }) {
+                        Image(systemName: "trash")
+                            .padding()
+                            .background(Color.red.opacity(0.1))
+                            .foregroundColor(.red)
+                            .cornerRadius(10)
+                    }
+                }
+                .padding()
+                .background(Color(UIColor.systemBackground).shadow(radius: 2, y: -2))
             }
-            .navigationTitle("Tasks")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: {
@@ -163,6 +196,11 @@ struct TaskManagementView: View {
             }
             .sheet(item: $selectedTaskForDetail) { task in
                 TaskDetailView(task: task)
+            }
+            .sheet(isPresented: $isShowingEditCategorySheet) {
+                if let category = categoryToEdit {
+                    EditCategorySheet(category: category)
+                }
             }
         }
     }
@@ -218,6 +256,18 @@ struct TaskManagementView: View {
             }
         }
     }
+
+    private func deleteCompletedTasks() {
+        let completedTasks = tasks.filter { task in
+            let matchMode = viewMode == .rest ? task.isRest : (!task.isRest && task.category?.id == selectedCategory?.id)
+            return matchMode && task.status == .done
+        }
+        withAnimation {
+            for task in completedTasks {
+                modelContext.delete(task)
+            }
+        }
+    }
 }
 
 struct CategoryTabItemView: View {
@@ -225,6 +275,7 @@ struct CategoryTabItemView: View {
     let selectedCategory: TaskCategory?
     let onTap: () -> Void
     let onDelete: () -> Void
+    let onEdit: () -> Void
 
     var body: some View {
         HStack(spacing: 6) {
@@ -247,6 +298,12 @@ struct CategoryTabItemView: View {
         .cornerRadius(16)
         .onTapGesture(perform: onTap)
         .contextMenu {
+            Button(action: onEdit) {
+                Label("名前の変更", systemImage: "pencil")
+            }
+            Button(action: onEdit) {
+                Label("テーマカラーの変更", systemImage: "paintpalette")
+            }
             Button(role: .destructive, action: onDelete) {
                 Label("削除", systemImage: "trash")
             }
@@ -280,6 +337,47 @@ struct CategoryTabItemView: View {
 
     private var foregroundColor: Color {
         isSelected ? .white : .primary
+    }
+}
+
+struct EditCategorySheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Bindable var category: TaskCategory
+    @State private var themeColor: Color
+
+    init(category: TaskCategory) {
+        self.category = category
+        _themeColor = State(initialValue: {
+            if let hex = category.themeColorHex, let color = Color(hex: hex) {
+                return color
+            }
+            return .blue
+        }())
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section(header: Text("カテゴリ情報")) {
+                    TextField("カテゴリ名", text: $category.name)
+                    ColorPicker("テーマカラー", selection: $themeColor)
+                }
+            }
+            .navigationTitle("カテゴリ編集")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("キャンセル") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") {
+                        category.themeColorHex = themeColor.toHex()
+                        dismiss()
+                    }
+                    .disabled(category.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
     }
 }
 
@@ -523,60 +621,83 @@ struct TaskRowView: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Button(action: {
-                toggleStatus()
-            }) {
-                Image(systemName: statusIconName)
-                    .foregroundColor(statusColor)
-                    .font(.title2)
-            }
-            .buttonStyle(.plain)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(task.title)
-                    .strikethrough(task.status == .done)
-                    .foregroundColor(textColor)
-                    .font(.headline)
-
-                HStack(spacing: 8) {
-                    Label(task.startDate.formatted(date: .abbreviated, time: .shortened), systemImage: "calendar")
-
-                    Label(task.priority.rawValue, systemImage: "exclamationmark.circle")
-                        .foregroundColor(priorityColor(task.priority))
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 12) {
+                Button(action: {
+                    toggleStatus(for: task)
+                }) {
+                    Image(systemName: statusIconName(for: task))
+                        .foregroundColor(statusColor(for: task))
+                        .font(.title2)
                 }
-                .font(.caption)
-                .foregroundColor(.secondary)
+                .buttonStyle(.plain)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(task.title)
+                        .strikethrough(task.status == .done)
+                        .foregroundColor(textColor)
+                        .font(.headline)
+
+                    HStack(spacing: 8) {
+                        Label(task.startDate.formatted(date: .abbreviated, time: .shortened), systemImage: "calendar")
+
+                        Label(task.priority.rawValue, systemImage: "exclamationmark.circle")
+                            .foregroundColor(priorityColor(task.priority))
+                    }
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                }
+            }
+            .contextMenu {
+                Button(role: .destructive) {
+                    isShowingDeleteAlert = true
+                } label: {
+                    Label("削除", systemImage: "trash")
+                }
+            }
+            .alert("確認", isPresented: $isShowingDeleteAlert) {
+                Button("キャンセル", role: .cancel) { }
+                Button("削除", role: .destructive) {
+                    modelContext.delete(task)
+                }
+            } message: {
+                Text("このタスクを削除しますか？")
+            }
+
+            if let subtasks = task.subtasks, !subtasks.isEmpty {
+                ForEach(subtasks.sorted(by: { $0.startDate < $1.startDate })) { subtask in
+                    HStack(alignment: .top, spacing: 12) {
+                        Button(action: {
+                            toggleStatus(for: subtask)
+                        }) {
+                            Image(systemName: statusIconName(for: subtask))
+                                .foregroundColor(statusColor(for: subtask))
+                                .font(.body)
+                        }
+                        .buttonStyle(.plain)
+
+                        Text(subtask.title)
+                            .strikethrough(subtask.status == .done)
+                            .foregroundColor(subtask.status == .done ? .gray : .primary)
+                            .font(.subheadline)
+                    }
+                    .padding(.leading, 32)
+                }
             }
         }
         .padding(.vertical, 4)
-        .contextMenu {
-            Button(role: .destructive) {
-                isShowingDeleteAlert = true
-            } label: {
-                Label("削除", systemImage: "trash")
-            }
-        }
-        .alert("確認", isPresented: $isShowingDeleteAlert) {
-            Button("キャンセル", role: .cancel) { }
-            Button("削除", role: .destructive) {
-                modelContext.delete(task)
-            }
-        } message: {
-            Text("このタスクを削除しますか？")
-        }
     }
 
-    private var statusIconName: String {
-        switch task.status {
+    private func statusIconName(for t: Task) -> String {
+        switch t.status {
         case .todo: return "circle"
         case .inProgress: return "circle.dashed"
         case .done: return "checkmark.circle.fill"
         }
     }
 
-    private var statusColor: Color {
-        switch task.status {
+    private func statusColor(for t: Task) -> Color {
+        switch t.status {
         case .todo: return .gray
         case .inProgress: return .blue
         case .done: return .green
@@ -591,15 +712,18 @@ struct TaskRowView: View {
         }
     }
 
-    private func toggleStatus() {
+    private func toggleStatus(for t: Task) {
         withAnimation {
-            switch task.status {
+            switch t.status {
             case .todo:
-                task.status = .done
+                t.status = .done
+                t.completedDate = Date()
             case .inProgress:
-                task.status = .done
+                t.status = .done
+                t.completedDate = Date()
             case .done:
-                task.status = .todo
+                t.status = .todo
+                t.completedDate = nil
             }
         }
     }
@@ -613,29 +737,20 @@ struct TaskRowView: View {
 struct CategoryDropDelegate: DropDelegate {
     let item: TaskCategory
     var categories: [TaskCategory]
+    @Binding var draggedItem: TaskCategory?
     let onReorder: (TaskCategory, TaskCategory) -> Void
 
     func dropEntered(info: DropInfo) {
-        // Implementation for drop entered if needed
+        guard let draggedItem = draggedItem else { return }
+        if draggedItem != item {
+            withAnimation(.default) {
+                onReorder(draggedItem, item)
+            }
+        }
     }
 
     func performDrop(info: DropInfo) -> Bool {
-        guard info.hasItemsConforming(to: [UTType.text]) else { return false }
-
-        let providers = info.itemProviders(for: [UTType.text])
-        if let provider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.text.identifier) }) {
-            _ = provider.loadObject(ofClass: String.self) { string, error in
-                if let idString = string, let id = UUID(uuidString: idString) {
-                    DispatchQueue.main.async {
-                        if let source = categories.first(where: { $0.id == id }) {
-                            if source != item {
-                                onReorder(source, item)
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        draggedItem = nil
         return true
     }
 
