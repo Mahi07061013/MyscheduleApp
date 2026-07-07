@@ -16,6 +16,8 @@ struct FocusView: View {
     @State private var selectedCategoryForFocus: TaskCategory?
     @State private var selectedTask: Task?
     @State private var isShowingAddTaskSheet = false
+    @State private var showingNewTaskAlert = false
+    @State private var newTaskName = ""
 
     @Query(sort: \TaskCategory.orderIndex) private var categories: [TaskCategory]
 
@@ -52,12 +54,13 @@ struct FocusView: View {
                 }
                 .pickerStyle(.segmented)
                 .padding()
+                .disabled(timerManager.isRunning)
                 .onChange(of: focusMode) { _, _ in
                     selectedTask = incompleteTasks.first
                 }
 
-                if focusMode == .focus {
-                    HStack {
+                HStack(spacing: 12) {
+                    if focusMode == .focus {
                         Picker("タブ", selection: $selectedCategoryForFocus) {
                             Text("未分類").tag(TaskCategory?.none)
                             ForEach(categories) { category in
@@ -65,37 +68,61 @@ struct FocusView: View {
                             }
                         }
                         .pickerStyle(.menu)
+                        .padding(8)
+                        .background(
+                            Color(hex: selectedCategoryForFocus?.themeColorHex ?? "") ?? Color.clear
+                        )
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.primary, lineWidth: 1))
+                        .disabled(timerManager.isRunning)
                         .onChange(of: selectedCategoryForFocus) { _, _ in
                             selectedTask = incompleteTasks.first
                         }
-                        Spacer()
                     }
-                    .padding(.horizontal)
-                }
 
-                HStack {
-                    if !incompleteTasks.isEmpty {
+                    Menu {
                         Picker("Task", selection: $selectedTask) {
                             Text("Select a task").tag(Task?.none)
                             ForEach(incompleteTasks) { task in
                                 Text(task.title).tag(Task?.some(task))
                             }
                         }
-                        .pickerStyle(.menu)
-                    } else {
-                        Text("No tasks available")
-                            .foregroundColor(.secondary)
+                        Button("新規タスク") {
+                            newTaskName = ""
+                            showingNewTaskAlert = true
+                        }
+                    } label: {
+                        HStack {
+                            Text(selectedTask?.title ?? (incompleteTasks.isEmpty ? "No tasks available" : "Select a task"))
+                            Image(systemName: "chevron.down")
+                        }
+                        .padding(8)
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.primary, lineWidth: 1))
                     }
+                    .disabled(timerManager.isRunning)
 
                     Spacer()
 
-                    Button(action: {
-                        isShowingAddTaskSheet = true
-                    }) {
-                        Image(systemName: "plus")
-                            .padding(8)
-                            .background(Color.gray.opacity(0.2))
-                            .cornerRadius(8)
+                    if let selectedTask = selectedTask {
+                        VStack(alignment: .trailing, spacing: 4) {
+                            let totalSeconds = selectedTask.pomodoroSessions?.reduce(0) { $0 + $1.duration } ?? 0
+                            let totalMinutes = Int(totalSeconds) / 60
+                            let spentHours = totalMinutes / 60
+                            let spentMins = totalMinutes % 60
+
+                            let estimatedTotalSeconds = TimeInterval(selectedTask.estimatedSessions * timerManager.defaultDurationMinutes * 60)
+                            let remainingSeconds = estimatedTotalSeconds - totalSeconds
+                            let isNegative = remainingSeconds < 0
+                            let absRemainingMinutes = Int(abs(remainingSeconds)) / 60
+                            let remainingHours = absRemainingMinutes / 60
+                            let remainingMins = absRemainingMinutes % 60
+
+                            Text("\(spentHours)時間\(spentMins)分")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text("\(isNegative ? "-" : "")\(remainingHours)時間\(remainingMins)分")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                     }
                 }
                 .padding(.horizontal)
@@ -215,6 +242,19 @@ struct FocusView: View {
             }
             .sheet(isPresented: $isShowingAddTaskSheet) {
                 AddTaskView(selectedCategory: selectedCategoryForFocus, initialIsRest: focusMode == .rest, showCategoryCreation: focusMode == .focus)
+            }
+            .alert("新規タスク", isPresented: $showingNewTaskAlert) {
+                TextField("タスク名", text: $newTaskName)
+                Button("キャンセル", role: .cancel) {}
+                Button("追加") {
+                    let task = Task(
+                        title: newTaskName.isEmpty ? "New Task" : newTaskName,
+                        category: selectedCategoryForFocus,
+                        isRest: focusMode == .rest
+                    )
+                    modelContext.insert(task)
+                    selectedTask = task
+                }
             }
         }
     }
