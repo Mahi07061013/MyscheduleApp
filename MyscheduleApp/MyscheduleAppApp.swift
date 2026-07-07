@@ -31,11 +31,10 @@ struct MyscheduleAppApp: App {
         } catch {
             // Because we changed optional properties to non-optional, lightweight migration might fail.
             // Catch the error, delete the corrupted/incompatible database, and try again.
-            if let url = modelConfiguration.url {
-                try? FileManager.default.removeItem(at: url)
-                try? FileManager.default.removeItem(at: url.deletingPathExtension().appendingPathExtension("store-shm"))
-                try? FileManager.default.removeItem(at: url.deletingPathExtension().appendingPathExtension("store-wal"))
-            }
+            let url = modelConfiguration.url
+            try? FileManager.default.removeItem(at: url)
+            try? FileManager.default.removeItem(at: url.deletingPathExtension().appendingPathExtension("store-shm"))
+            try? FileManager.default.removeItem(at: url.deletingPathExtension().appendingPathExtension("store-wal"))
 
             do {
                 sharedModelContainer = try ModelContainer(for: schema, configurations: [modelConfiguration])
