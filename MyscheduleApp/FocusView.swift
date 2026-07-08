@@ -218,19 +218,37 @@ struct FocusView: View {
                     timerManager.timeRemaining = timerManager.defaultDuration
                 }
             }
-            .onChange(of: timerManager.showingFinishedAlert) { _, newValue in
-                if newValue {
-                    let newSession = PomodoroSession(date: Date(), duration: timerManager.defaultDuration, task: selectedTask)
-                    modelContext.insert(newSession)
+            .sheet(isPresented: Bindable(timerManager).showingFinishedAlert) {
+                VStack(spacing: 20) {
+                    Text("お疲れ様でした！\n今の気分は？")
+                        .font(.title2)
+                        .multilineTextAlignment(.center)
+                        .padding(.top, 30)
+
+                    HStack(spacing: 15) {
+                        let emojis = ["😫", "🙁", "😐", "🙂", "🤩"]
+                        ForEach(0..<5, id: \.self) { index in
+                            Button(action: {
+                                let newSession = PomodoroSession(
+                                    date: Date(),
+                                    duration: timerManager.defaultDuration,
+                                    moodRating: index + 1,
+                                    task: selectedTask
+                                )
+                                modelContext.insert(newSession)
+                                timerManager.showingFinishedAlert = false
+                                timerManager.resetTimer()
+                            }) {
+                                Text(emojis[index])
+                                    .font(.system(size: 40))
+                            }
+                        }
+                    }
+                    .padding(.bottom, 30)
                 }
-            }
-            .alert("お疲れ様でした！", isPresented: Bindable(timerManager).showingFinishedAlert) {
-                Button("OK", role: .cancel) {
-                    timerManager.showingFinishedAlert = false
-                    timerManager.resetTimer()
-                }
-            } message: {
-                Text("ポモドーロセッションが完了しました。")
+                .padding()
+                .presentationDetents([.fraction(0.3)])
+                .interactiveDismissDisabled()
             }
             .alert("本当にやめますか？", isPresented: $showingStopAlert) {
                 Button("やめる", role: .destructive) {
