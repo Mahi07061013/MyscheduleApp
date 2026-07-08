@@ -12,6 +12,7 @@ struct ReflectView: View {
     @Query var allTasks: [Task]
     @State private var displayMode: DisplayMode = .count
     @State private var showingAllCategories = false
+    @State private var targetMonth: Date = Date()
 
     // MARK: - Helpers
 
@@ -84,8 +85,7 @@ struct ReflectView: View {
 
     // Calendar grid calculation
     private var currentMonthDates: [Date] {
-        let today = Date()
-        guard let monthInterval = calendar.dateInterval(of: .month, for: today) else { return [] }
+        guard let monthInterval = calendar.dateInterval(of: .month, for: targetMonth) else { return [] }
 
         var dates: [Date] = []
         var currentDate = monthInterval.start
@@ -112,13 +112,39 @@ struct ReflectView: View {
             ScrollView {
                 VStack(spacing: 24) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("カレンダー")
-                            .font(.headline)
-                            .padding(.horizontal)
+                        HStack {
+                            Text("カレンダー")
+                                .font(.headline)
+
+                            Spacer()
+
+                            Button(action: {
+                                if let newDate = calendar.date(byAdding: .month, value: -1, to: targetMonth) {
+                                    targetMonth = newDate
+                                }
+                            }) {
+                                Image(systemName: "chevron.left")
+                                    .padding(.horizontal, 8)
+                            }
+
+                            Text(targetMonth, format: .dateTime.year().month())
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+
+                            Button(action: {
+                                if let newDate = calendar.date(byAdding: .month, value: 1, to: targetMonth) {
+                                    targetMonth = newDate
+                                }
+                            }) {
+                                Image(systemName: "chevron.right")
+                                    .padding(.horizontal, 8)
+                            }
+                        }
+                        .padding(.horizontal)
 
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 4) {
                             ForEach(currentMonthDates, id: \.self) { date in
-                                let isCurrentMonth = calendar.isDate(date, equalTo: Date(), toGranularity: .month)
+                                let isCurrentMonth = calendar.isDate(date, equalTo: targetMonth, toGranularity: .month)
                                 let hasSessions = !(sessionsByDate[date]?.isEmpty ?? true)
 
                                 RoundedRectangle(cornerRadius: 4)
@@ -288,7 +314,9 @@ struct ReflectView: View {
                 }
                 .padding(.vertical)
             }
-            .navigationTitle("振り返り")
+            .onAppear {
+                targetMonth = Date()
+            }
             .sheet(isPresented: $showingAllCategories) {
                 NavigationStack {
                     List(categoryData) { data in
