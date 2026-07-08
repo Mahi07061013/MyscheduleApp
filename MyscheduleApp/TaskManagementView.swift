@@ -452,6 +452,9 @@ struct AddTaskView: View {
     @State private var subtasks: [String] = []
     @State private var newSubtaskTitle = ""
 
+    @State private var targetHours = 0
+    @State private var targetMinutes = 25
+
     var body: some View {
         NavigationStack {
             Form {
@@ -485,6 +488,27 @@ struct AddTaskView: View {
                     if hasStartDate {
                         DatePicker("開始日", selection: $startDate, displayedComponents: [.date, .hourAndMinute])
                     }
+                }
+
+                Section(header: Text("目標時間")) {
+                    HStack {
+                        Picker("時間", selection: $targetHours) {
+                            ForEach(0..<24) { hour in
+                                Text("\(hour)時間").tag(hour)
+                            }
+                        }
+                        .pickerStyle(WheelPickerStyle())
+                        .frame(maxWidth: .infinity)
+
+                        Picker("分", selection: $targetMinutes) {
+                            ForEach(0..<60) { minute in
+                                Text("\(minute)分").tag(minute)
+                            }
+                        }
+                        .pickerStyle(WheelPickerStyle())
+                        .frame(maxWidth: .infinity)
+                    }
+                    .frame(height: 120)
                 }
 
                 Section(header: Text("優先度")) {
@@ -585,11 +609,14 @@ struct AddTaskView: View {
             finalCategory = newCategory
         }
 
+        let totalMinutes = targetHours * 60 + targetMinutes
+
         let newTask = Task(
             title: title.trimmingCharacters(in: .whitespacesAndNewlines),
             status: status,
             startDate: hasStartDate ? startDate : Date(),
             priority: hasPriority ? priority : .low,
+            estimatedMinutes: totalMinutes,
             category: finalCategory,
             tags: Array(selectedTags),
             isRest: initialIsRest

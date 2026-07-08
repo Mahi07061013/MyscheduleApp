@@ -53,6 +53,7 @@ final class Task {
     var startDate: Date
     var priority: TaskPriority
     var estimatedSessions: Int
+    var estimatedMinutes: Int?
     var textColorHex: String?
 
     @Relationship(deleteRule: .cascade, inverse: \PomodoroSession.task)
@@ -71,13 +72,14 @@ final class Task {
     var orderIndex: Int = 0
     var completedDate: Date?
 
-    init(id: UUID = UUID(), title: String, status: TaskStatus = .todo, startDate: Date = Date(), priority: TaskPriority = .low, estimatedSessions: Int = 1, textColorHex: String? = nil, category: TaskCategory? = nil, tags: [Tag]? = nil, subtasks: [Task]? = nil, parentTask: Task? = nil, isRest: Bool = false, orderIndex: Int = 0, completedDate: Date? = nil) {
+    init(id: UUID = UUID(), title: String, status: TaskStatus = .todo, startDate: Date = Date(), priority: TaskPriority = .low, estimatedSessions: Int = 1, estimatedMinutes: Int? = nil, textColorHex: String? = nil, category: TaskCategory? = nil, tags: [Tag]? = nil, subtasks: [Task]? = nil, parentTask: Task? = nil, isRest: Bool = false, orderIndex: Int = 0, completedDate: Date? = nil) {
         self.id = id
         self.title = title
         self.status = status
         self.startDate = startDate
         self.priority = priority
         self.estimatedSessions = estimatedSessions
+        self.estimatedMinutes = estimatedMinutes
         self.textColorHex = textColorHex
         self.category = category
         self.tags = tags

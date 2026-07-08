@@ -109,7 +109,8 @@ struct FocusView: View {
                             let spentHours = totalMinutes / 60
                             let spentMins = totalMinutes % 60
 
-                            let estimatedTotalSeconds = TimeInterval(selectedTask.estimatedSessions * timerManager.defaultDurationMinutes * 60)
+                            let targetMinutes = selectedTask.estimatedMinutes ?? (selectedTask.estimatedSessions * timerManager.defaultDurationMinutes)
+                            let estimatedTotalSeconds = TimeInterval(targetMinutes * 60)
                             let remainingSeconds = estimatedTotalSeconds - totalSeconds
                             let isNegative = remainingSeconds < 0
                             let absRemainingMinutes = Int(abs(remainingSeconds)) / 60
@@ -261,17 +262,78 @@ struct FocusView: View {
             .sheet(isPresented: $isShowingAddTaskSheet) {
                 AddTaskView(selectedCategory: selectedCategoryForFocus, initialIsRest: focusMode == .rest, showCategoryCreation: focusMode == .focus)
             }
-            .alert("新規タスク", isPresented: $showingNewTaskAlert) {
-                TextField("タスク名", text: $newTaskName)
-                Button("キャンセル", role: .cancel) {}
-                Button("追加") {
-                    let task = Task(
-                        title: newTaskName.isEmpty ? "New Task" : newTaskName,
-                        category: selectedCategoryForFocus,
-                        isRest: focusMode == .rest
-                    )
-                    modelContext.insert(task)
-                    selectedTask = task
+            .sheet(isPresented: $showingNewTaskAlert) {
+                NewTaskSheet(
+                    isPresented: $showingNewTaskAlert,
+                    selectedCategory: selectedCategoryForFocus,
+                    isRest: focusMode == .rest,
+                    onSave: { task in
+                        modelContext.insert(task)
+                        selectedTask = task
+                    }
+                )
+            }
+        }
+    }
+}
+
+struct NewTaskSheet: View {
+    @Binding var isPresented: Bool
+    var selectedCategory: TaskCategory?
+    var isRest: Bool
+    var onSave: (Task) -> Void
+
+    @State private var newTaskName = ""
+    @State private var targetHours = 0
+    @State private var targetMinutes = 25
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section(header: Text("タスク名")) {
+                    TextField("タスク名", text: $newTaskName)
+                }
+                Section(header: Text("目標時間")) {
+                    HStack {
+                        Picker("時間", selection: $targetHours) {
+                            ForEach(0..<24) { hour in
+                                Text("\(hour)時間").tag(hour)
+                            }
+                        }
+                        .pickerStyle(WheelPickerStyle())
+                        .frame(maxWidth: .infinity)
+
+                        Picker("分", selection: $targetMinutes) {
+                            ForEach(0..<60) { minute in
+                                Text("\(minute)分").tag(minute)
+                            }
+                        }
+                        .pickerStyle(WheelPickerStyle())
+                        .frame(maxWidth: .infinity)
+                    }
+                    .frame(height: 120)
+                }
+            }
+            .navigationTitle("新規タスク")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("キャンセル") {
+                        isPresented = false
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("追加") {
+                        let totalMinutes = targetHours * 60 + targetMinutes
+                        let task = Task(
+                            title: newTaskName.isEmpty ? "New Task" : newTaskName,
+                            estimatedMinutes: totalMinutes,
+                            category: selectedCategory,
+                            isRest: isRest
+                        )
+                        onSave(task)
+                        isPresented = false
+                    }
                 }
             }
         }
