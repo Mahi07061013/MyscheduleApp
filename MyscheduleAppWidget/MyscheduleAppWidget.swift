@@ -8,7 +8,7 @@ struct Provider: TimelineProvider {
     }
 
     func getSnapshot(in context: Context, completion: @escaping (SimpleEntry) -> Void) {
-        Task {
+        Swift.Task {
             let date = await getLatestCompletedTaskDate()
             let entry = SimpleEntry(date: Date(), latestCompletedDate: date)
             completion(entry)
@@ -16,7 +16,7 @@ struct Provider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<SimpleEntry>) -> Void) {
-        Task {
+        Swift.Task {
             let date = await getLatestCompletedTaskDate()
             let entries = [SimpleEntry(date: Date(), latestCompletedDate: date)]
             // Since we are showing a relative date which updates continuously in the view,
