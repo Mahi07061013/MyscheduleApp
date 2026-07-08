@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		41767A812FFDDF0300982B87 /* MyscheduleAppWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41767A7F2FFDDF0300982B87 /* MyscheduleAppWidget.swift */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		4176798E2FDF9E0400982B87 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -27,6 +31,7 @@
 		417679802FDF9E0300982B87 /* MyscheduleApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MyscheduleApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		4176798D2FDF9E0400982B87 /* MyscheduleAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MyscheduleAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		417679972FDF9E0400982B87 /* MyscheduleAppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MyscheduleAppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		41767A7F2FFDDF0300982B87 /* MyscheduleAppWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyscheduleAppWidget.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -75,6 +80,7 @@
 		417679772FDF9E0300982B87 = {
 			isa = PBXGroup;
 			children = (
+				41767A802FFDDF0300982B87 /* MyscheduleAppWidget */,
 				417679822FDF9E0300982B87 /* MyscheduleApp */,
 				417679902FDF9E0400982B87 /* MyscheduleAppTests */,
 				4176799A2FDF9E0400982B87 /* MyscheduleAppUITests */,
@@ -90,6 +96,14 @@
 				417679972FDF9E0400982B87 /* MyscheduleAppUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		41767A802FFDDF0300982B87 /* MyscheduleAppWidget */ = {
+			isa = PBXGroup;
+			children = (
+				41767A7F2FFDDF0300982B87 /* MyscheduleAppWidget.swift */,
+			);
+			path = MyscheduleAppWidget;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -236,6 +250,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				41767A812FFDDF0300982B87 /* MyscheduleAppWidget.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
