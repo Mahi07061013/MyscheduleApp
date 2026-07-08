@@ -15,6 +15,9 @@ struct TaskDetailView: View {
     @State private var newTagName = ""
     @State private var newSubtaskTitle = ""
 
+    @State private var targetHours = 0
+    @State private var targetMinutes = 25
+
     let colorOptions: [(name: String, color: Color, hex: String?)] = [
         ("デフォルト", .primary, nil),
         ("赤", .red, Color.red.toHex()),
@@ -75,10 +78,25 @@ struct TaskDetailView: View {
                     }
                 }
 
-                Section(header: Text("見積もり")) {
-                    Stepper(value: $task.estimatedSessions, in: 1...20) {
-                        Text("ポモドーロ数: \(task.estimatedSessions)")
+                Section(header: Text("目標時間")) {
+                    HStack {
+                        Picker("時間", selection: $targetHours) {
+                            ForEach(0..<24) { hour in
+                                Text("\(hour)時間").tag(hour)
+                            }
+                        }
+                        .pickerStyle(WheelPickerStyle())
+                        .frame(maxWidth: .infinity)
+
+                        Picker("分", selection: $targetMinutes) {
+                            ForEach(0..<60) { minute in
+                                Text("\(minute)分").tag(minute)
+                            }
+                        }
+                        .pickerStyle(WheelPickerStyle())
+                        .frame(maxWidth: .infinity)
                     }
+                    .frame(height: 120)
                 }
 
                 Section(header: Text("優先度")) {
@@ -174,7 +192,18 @@ struct TaskDetailView: View {
                     task.completedDate = nil
                 }
             }
+            .onChange(of: targetHours) { _, _ in updateEstimatedMinutes() }
+            .onChange(of: targetMinutes) { _, _ in updateEstimatedMinutes() }
+            .onAppear {
+                let totalMins = task.estimatedMinutes ?? (task.estimatedSessions * 25)
+                targetHours = totalMins / 60
+                targetMinutes = totalMins % 60
+            }
         }
+    }
+
+    private func updateEstimatedMinutes() {
+        task.estimatedMinutes = targetHours * 60 + targetMinutes
     }
 
     private func createNewCategory() {
