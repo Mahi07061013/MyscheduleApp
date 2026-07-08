@@ -61,18 +61,25 @@ struct FocusView: View {
 
                 HStack(spacing: 12) {
                     if focusMode == .focus {
-                        Picker("タブ", selection: $selectedCategoryForFocus) {
-                            Text("未分類").tag(TaskCategory?.none)
-                            ForEach(categories) { category in
-                                Text(category.name).tag(TaskCategory?.some(category))
+                        Menu {
+                            Picker("タブ", selection: $selectedCategoryForFocus) {
+                                Text("未分類").tag(TaskCategory?.none)
+                                ForEach(categories) { category in
+                                    Text(category.name).tag(TaskCategory?.some(category))
+                                }
                             }
+                        } label: {
+                            HStack {
+                                Text(selectedCategoryForFocus?.name ?? "未分類")
+                                Image(systemName: "chevron.down")
+                            }
+                            .padding(8)
+                            .foregroundColor(.primary)
+                            .background(
+                                Color(hex: selectedCategoryForFocus?.themeColorHex ?? "") ?? Color.clear
+                            )
+                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.primary, lineWidth: 1))
                         }
-                        .pickerStyle(.menu)
-                        .padding(8)
-                        .background(
-                            Color(hex: selectedCategoryForFocus?.themeColorHex ?? "") ?? Color.clear
-                        )
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.primary, lineWidth: 1))
                         .disabled(timerManager.isRunning)
                         .onChange(of: selectedCategoryForFocus) { _, _ in
                             selectedTask = incompleteTasks.first
@@ -104,23 +111,19 @@ struct FocusView: View {
 
                     if let selectedTask = selectedTask {
                         VStack(alignment: .trailing, spacing: 4) {
+                            let targetMinutes = selectedTask.estimatedMinutes ?? (selectedTask.estimatedSessions * timerManager.defaultDurationMinutes)
+                            let targetHours = targetMinutes / 60
+                            let targetMins = targetMinutes % 60
+
                             let totalSeconds = selectedTask.pomodoroSessions?.reduce(0) { $0 + $1.duration } ?? 0
                             let totalMinutes = Int(totalSeconds) / 60
                             let spentHours = totalMinutes / 60
                             let spentMins = totalMinutes % 60
 
-                            let targetMinutes = selectedTask.estimatedMinutes ?? (selectedTask.estimatedSessions * timerManager.defaultDurationMinutes)
-                            let estimatedTotalSeconds = TimeInterval(targetMinutes * 60)
-                            let remainingSeconds = estimatedTotalSeconds - totalSeconds
-                            let isNegative = remainingSeconds < 0
-                            let absRemainingMinutes = Int(abs(remainingSeconds)) / 60
-                            let remainingHours = absRemainingMinutes / 60
-                            let remainingMins = absRemainingMinutes % 60
-
-                            Text("\(spentHours)時間\(spentMins)分")
+                            Text("目標 \(targetHours)時間\(targetMins)分")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
-                            Text("\(isNegative ? "-" : "")\(remainingHours)時間\(remainingMins)分")
+                            Text("現在 \(spentHours)時間\(spentMins)分")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
