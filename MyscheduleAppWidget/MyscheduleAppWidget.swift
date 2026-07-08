@@ -78,7 +78,6 @@ struct MyscheduleAppWidgetEntryView : View {
     }
 }
 
-@main
 struct MyscheduleAppWidget: Widget {
     let kind: String = "MyscheduleAppWidget"
 
