@@ -106,6 +106,8 @@ struct TaskManagementView: View {
                         }
                         .padding()
                     }
+
+                    Divider()
                 }
 
                 List {
@@ -154,15 +156,6 @@ struct TaskManagementView: View {
                 }
                 .padding()
                 .background(Color(UIColor.systemBackground).shadow(radius: 2, y: -2))
-            }
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: {
-                        isShowingAddTaskSheet = true
-                    }) {
-                        Image(systemName: "plus")
-                    }
-                }
             }
             .sheet(isPresented: $isShowingAddCategorySheet) {
                 AddCategorySheet(
@@ -299,10 +292,7 @@ struct CategoryTabItemView: View {
         .onTapGesture(perform: onTap)
         .contextMenu {
             Button(action: onEdit) {
-                Label("名前の変更", systemImage: "pencil")
-            }
-            Button(action: onEdit) {
-                Label("テーマカラーの変更", systemImage: "paintpalette")
+                Label("タブの編集", systemImage: "pencil")
             }
             Button(role: .destructive, action: onDelete) {
                 Label("削除", systemImage: "trash")
