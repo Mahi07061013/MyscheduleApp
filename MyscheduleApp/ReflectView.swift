@@ -61,7 +61,7 @@ struct ReflectView: View {
         var grouped: [String: (colorHex: String?, value: Double)] = [:]
 
         for session in filteredSessions {
-            let categoryName = session.task?.category?.name ?? "未分類"
+            let categoryName = session.task?.category?.name ?? "カテゴリなし"
             let colorHex = session.task?.category?.themeColorHex
 
             let amount: Double = displayMode == .count

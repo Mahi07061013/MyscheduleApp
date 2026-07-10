@@ -57,20 +57,6 @@ struct TaskManagementView: View {
                     // Categories Tab UI
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 12) {
-                            // Default Uncategorized Tab
-                            Button(action: {
-                                withAnimation {
-                                    selectedCategory = nil
-                                }
-                            }) {
-                                Text("未分類")
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 8)
-                                    .background(selectedCategory == nil ? Color.blue : Color.gray.opacity(0.2))
-                                    .foregroundColor(selectedCategory == nil ? .white : .primary)
-                                    .cornerRadius(16)
-                            }
-
                             ForEach(categories) { category in
                                 CategoryTabItemView(
                                     category: category,
@@ -116,6 +102,9 @@ struct TaskManagementView: View {
                         if viewMode == .rest {
                             return task.isRest
                         } else {
+                            if categories.isEmpty {
+                                return !task.isRest
+                            }
                             return !task.isRest && task.category?.id == selectedCategory?.id
                         }
                     }.sorted(by: { $0.orderIndex < $1.orderIndex })) { task in
@@ -196,6 +185,31 @@ struct TaskManagementView: View {
                     EditCategorySheet(category: category)
                 }
             }
+            .onAppear {
+                migrateLegacyTasks()
+                if selectedCategory == nil, let firstCat = categories.first {
+                    selectedCategory = firstCat
+                }
+            }
+            .onChange(of: categories) { _, newCategories in
+                if selectedCategory == nil || !newCategories.contains(where: { $0.id == selectedCategory?.id }) {
+                    selectedCategory = newCategories.first
+                }
+            }
+        }
+    }
+
+    private func migrateLegacyTasks() {
+        let legacyTasks = tasks.filter { !$0.isRest && $0.category == nil }
+        if !legacyTasks.isEmpty {
+            let uncategorized = categories.first(where: { $0.name == "未分類" }) ?? {
+                let newCat = TaskCategory(name: "未分類", orderIndex: 0)
+                modelContext.insert(newCat)
+                return newCat
+            }()
+            for task in legacyTasks {
+                task.category = uncategorized
+            }
         }
     }
 
@@ -204,6 +218,9 @@ struct TaskManagementView: View {
             if viewMode == .rest {
                 return task.isRest
             } else {
+                if categories.isEmpty {
+                    return !task.isRest
+                }
                 return !task.isRest && task.category?.id == selectedCategory?.id
             }
         }.sorted(by: { $0.orderIndex < $1.orderIndex })
@@ -241,6 +258,9 @@ struct TaskManagementView: View {
             if viewMode == .rest {
                 return task.isRest
             } else {
+                if categories.isEmpty {
+                    return !task.isRest
+                }
                 return !task.isRest && task.category?.id == selectedCategory?.id
             }
         }.sorted(by: { $0.orderIndex < $1.orderIndex })
@@ -253,7 +273,16 @@ struct TaskManagementView: View {
 
     private func deleteCompletedTasks() {
         let completedTasks = tasks.filter { task in
-            let matchMode = viewMode == .rest ? task.isRest : (!task.isRest && task.category?.id == selectedCategory?.id)
+            let matchMode: Bool
+            if viewMode == .rest {
+                matchMode = task.isRest
+            } else {
+                if categories.isEmpty {
+                    matchMode = !task.isRest
+                } else {
+                    matchMode = !task.isRest && task.category?.id == selectedCategory?.id
+                }
+            }
             return matchMode && task.status == .done
         }
         withAnimation {
@@ -465,9 +494,12 @@ struct AddTaskView: View {
                             TextField("新しいタブ（カテゴリ）名", text: $newCategoryNameInTask)
                         } else {
                             Picker("タブ", selection: $localSelectedCategory) {
-                                Text("未分類").tag(TaskCategory?.none)
-                                ForEach(allCategories) { category in
-                                    Text(category.name).tag(TaskCategory?.some(category))
+                                if allCategories.isEmpty {
+                                    Text("").tag(TaskCategory?.none)
+                                } else {
+                                    ForEach(allCategories) { category in
+                                        Text(category.name).tag(TaskCategory?.some(category))
+                                    }
                                 }
                             }
                         }
@@ -587,7 +619,7 @@ struct AddTaskView: View {
             }
         }
         .onAppear {
-            localSelectedCategory = selectedCategory
+            localSelectedCategory = selectedCategory ?? allCategories.first
         }
     }
 
@@ -596,6 +628,10 @@ struct AddTaskView: View {
         let trimmedNewCategory = newCategoryNameInTask.trimmingCharacters(in: .whitespacesAndNewlines)
         if showCategoryCreation && !initialIsRest && isCreatingNewCategory && !trimmedNewCategory.isEmpty {
             let newCategory = TaskCategory(name: trimmedNewCategory, orderIndex: 999) // Can be adjusted, or fetch max order index
+            modelContext.insert(newCategory)
+            finalCategory = newCategory
+        } else if allCategories.isEmpty && !initialIsRest {
+            let newCategory = TaskCategory(name: "未分類", orderIndex: 0)
             modelContext.insert(newCategory)
             finalCategory = newCategory
         }
