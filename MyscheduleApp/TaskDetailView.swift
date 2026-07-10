@@ -15,7 +15,7 @@ struct TaskDetailView: View {
     @State private var newTagName = ""
     @State private var newSubtaskTitle = ""
 
-    @State private var targetHours = 0
+    @State private var targetHours: String = "0"
     @State private var targetMinutes = 25
 
     let colorOptions: [(name: String, color: Color, hex: String?)] = [
@@ -80,12 +80,12 @@ struct TaskDetailView: View {
 
                 Section(header: Text("目標時間")) {
                     HStack {
-                        Picker("時間", selection: $targetHours) {
-                            ForEach(0..<24) { hour in
-                                Text("\(hour)時間").tag(hour)
-                            }
+                        HStack {
+                            TextField("0", text: $targetHours)
+                                .keyboardType(.numberPad)
+                                .multilineTextAlignment(.trailing)
+                            Text("時間")
                         }
-                        .pickerStyle(WheelPickerStyle())
                         .frame(maxWidth: .infinity)
 
                         Picker("分", selection: $targetMinutes) {
@@ -196,14 +196,14 @@ struct TaskDetailView: View {
             .onChange(of: targetMinutes) { _, _ in updateEstimatedMinutes() }
             .onAppear {
                 let totalMins = task.estimatedMinutes ?? (task.estimatedSessions * 25)
-                targetHours = totalMins / 60
+                targetHours = String(totalMins / 60)
                 targetMinutes = totalMins % 60
             }
         }
     }
 
     private func updateEstimatedMinutes() {
-        task.estimatedMinutes = targetHours * 60 + targetMinutes
+        task.estimatedMinutes = (Int(targetHours) ?? 0) * 60 + targetMinutes
     }
 
     private func createNewCategory() {
