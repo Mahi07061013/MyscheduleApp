@@ -443,7 +443,7 @@ struct AddTaskView: View {
     @State private var subtasks: [String] = []
     @State private var newSubtaskTitle = ""
 
-    @State private var targetHours = 0
+    @State private var targetHours: String = "0"
     @State private var targetMinutes = 25
 
     var body: some View {
@@ -483,12 +483,12 @@ struct AddTaskView: View {
 
                 Section(header: Text("目標時間")) {
                     HStack {
-                        Picker("時間", selection: $targetHours) {
-                            ForEach(0..<24) { hour in
-                                Text("\(hour)時間").tag(hour)
-                            }
+                        HStack {
+                            TextField("0", text: $targetHours)
+                                .keyboardType(.numberPad)
+                                .multilineTextAlignment(.trailing)
+                            Text("時間")
                         }
-                        .pickerStyle(WheelPickerStyle())
                         .frame(maxWidth: .infinity)
 
                         Picker("分", selection: $targetMinutes) {
@@ -600,7 +600,7 @@ struct AddTaskView: View {
             finalCategory = newCategory
         }
 
-        let totalMinutes = targetHours * 60 + targetMinutes
+        let totalMinutes = (Int(targetHours) ?? 0) * 60 + targetMinutes
 
         let newTask = Task(
             title: title.trimmingCharacters(in: .whitespacesAndNewlines),
