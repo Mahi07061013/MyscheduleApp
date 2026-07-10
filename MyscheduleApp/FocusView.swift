@@ -27,6 +27,9 @@ struct FocusView: View {
             if focusMode == .rest {
                 return task.isRest
             } else {
+                if categories.isEmpty {
+                    return !task.isRest
+                }
                 return !task.isRest && task.category?.id == selectedCategoryForFocus?.id
             }
         }
@@ -63,14 +66,17 @@ struct FocusView: View {
                     if focusMode == .focus {
                         Menu {
                             Picker("タブ", selection: $selectedCategoryForFocus) {
-                                Text("未分類").tag(TaskCategory?.none)
-                                ForEach(categories) { category in
-                                    Text(category.name).tag(TaskCategory?.some(category))
+                                if categories.isEmpty {
+                                    Text("").tag(TaskCategory?.none)
+                                } else {
+                                    ForEach(categories) { category in
+                                        Text(category.name).tag(TaskCategory?.some(category))
+                                    }
                                 }
                             }
                         } label: {
                             HStack {
-                                Text(selectedCategoryForFocus?.name ?? "未分類")
+                                Text(selectedCategoryForFocus?.name ?? "カテゴリなし")
                                 Image(systemName: "chevron.down")
                             }
                             .padding(8)
@@ -211,6 +217,9 @@ struct FocusView: View {
             }
             .onAppear {
                 timerManager.requestNotificationAuthorization()
+                if selectedCategoryForFocus == nil, let firstCat = categories.first {
+                    selectedCategoryForFocus = firstCat
+                }
                 if selectedTask == nil {
                     selectedTask = incompleteTasks.first
                 }
@@ -220,6 +229,11 @@ struct FocusView: View {
                     // keep it
                 } else if !timerManager.isRunning {
                     timerManager.timeRemaining = timerManager.defaultDuration
+                }
+            }
+            .onChange(of: categories) { _, newCategories in
+                if selectedCategoryForFocus == nil || !newCategories.contains(where: { $0.id == selectedCategoryForFocus?.id }) {
+                    selectedCategoryForFocus = newCategories.first
                 }
             }
             .sheet(isPresented: Bindable(timerManager).showingFinishedAlert) {

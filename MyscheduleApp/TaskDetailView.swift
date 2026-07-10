@@ -56,9 +56,12 @@ struct TaskDetailView: View {
                             .disabled(newCategoryName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         } else {
                             Picker("タブ", selection: $task.category) {
-                                Text("未分類").tag(TaskCategory?.none)
-                                ForEach(allCategories) { category in
-                                    Text(category.name).tag(TaskCategory?.some(category))
+                                if allCategories.isEmpty {
+                                    Text("").tag(TaskCategory?.none)
+                                } else {
+                                    ForEach(allCategories) { category in
+                                        Text(category.name).tag(TaskCategory?.some(category))
+                                    }
                                 }
                             }
                         }
@@ -198,6 +201,15 @@ struct TaskDetailView: View {
                 let totalMins = task.estimatedMinutes ?? (task.estimatedSessions * 25)
                 targetHours = String(totalMins / 60)
                 targetMinutes = totalMins % 60
+
+                if task.category == nil, let firstCat = allCategories.first {
+                    task.category = firstCat
+                }
+            }
+            .onChange(of: allCategories) { _, newCategories in
+                if task.category == nil || !newCategories.contains(where: { $0.id == task.category?.id }) {
+                    task.category = newCategories.first
+                }
             }
         }
     }
