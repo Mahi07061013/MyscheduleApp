@@ -8,6 +8,7 @@
 import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
+import WidgetKit
 
 enum TaskViewMode: String, CaseIterable {
     case tasks = "Tasks"
@@ -743,6 +744,7 @@ struct TaskRowView: View {
                 t.completedDate = nil
             }
         }
+        WidgetCenter.shared.reloadAllTimelines()
     }
 }
 
